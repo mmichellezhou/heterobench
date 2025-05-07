@@ -35,10 +35,10 @@ We welcome contributions to HeteroBench! If you'd like to add new benchmarks, su
 
 ## Cite Us
 
-If you find our project helpful, please consider cite our [ICPE paper]():
+If you find our project helpful, please consider cite our [ICPE paper](https://dl.acm.org/doi/abs/10.1145/3676151.3719366):
 
 ```
-Hongzheng Tian, Alok Mishra, Zhiheng Chen, Rolando P Hong Enriquez, Dejan Milojicic, Eitan Frachtenberg, and Sitao Huang. HeteroBench: Multi-kernel Benchmarks for Heterogeneous Systems. In Proceedings of the 16th ACM/SPEC International Conference on Performance Engineering (ICPE 2025).
+Hongzheng Tian, Alok Mishra, Zhiheng Chen, Rolando P Hong Enriquez, Dejan Milojicic, Eitan Frachtenberg, and Sitao Huang. HeteroBench: Multi-kernel Benchmarks for Heterogeneous Systems. In Proceedings of the 16th ACM/SPEC International Conference on Performance Engineering (ICPE 2025, pp. 320-333)
 ```
 
 ## Support and Contact
