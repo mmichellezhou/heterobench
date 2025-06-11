@@ -1,0 +1,121 @@
+/*
+ * (C) Copyright [2024] Hewlett Packard Enterprise Development LP
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the Software),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included
+ * in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+#include "cpu_impl.h"
+#include <algorithm> // Required for std::min
+
+using namespace std;
+
+// Define BLOCK_SIZE for tiling.
+// This value can be tuned based on cache sizes and architecture.
+// For double (8 bytes) and typical 64-byte cache lines, 8 elements fit in a cache line.
+// A block size of 32 means processing 4 cache lines at a time, which is often a good balance.
+#ifndef BLOCK_SIZE
+#define BLOCK_SIZE 32
+#endif
+
+void kernel_adi(int tsteps, int n, double X[N + 0][N + 0], double A[N + 0][N + 0], double B[N + 0][N + 0])
+{
+  // Use __restrict__ for pointers to indicate to the compiler that the arrays
+  // X, A, and B do not alias (overlap in memory). This allows the compiler
+  // to perform more aggressive optimizations like reordering loads/stores
+  // and better vectorization. This is a GCC/Clang extension, common in HPC.
+  // The function signature's `double arr[N+0][N+0]` decays to `double (*arr)[N]`.
+  double (*__restrict__ restrict_X)[N] = (double (*__restrict__)[N])X;
+  double (*__restrict__ restrict_A)[N] = (double (*__restrict__)[N])A;
+  double (*__restrict__ restrict_B)[N] = (double (*__restrict__)[N])B;
+
+  // The outermost loop iterates TSTEPS times, as per the original code's `c0 <= TSTEPS`.
+  for (int t = 0; t <= TSTEPS; t++) {
+
+    // Phase 1: Row-wise operations (forward and backward sweeps)
+    // These loops access memory contiguously (row-major), which is cache-friendly.
+    // The inner loops have loop-carried dependencies (recurrences), which limit
+    // automatic vectorization. However, modern compilers with -O3 can still
+    // perform instruction-level parallelism and pipelining.
+    for (int c2 = 0; c2 <= N - 1; c2++) { // Iterate through rows (fixed row index)
+      // Loop 1: B update (forward sweep)
+      for (int c8 = 1; c8 <= N - 1; c8++) { // Iterate through columns
+        restrict_B[c2][c8] = restrict_B[c2][c8] - restrict_A[c2][c8] * restrict_A[c2][c8] / restrict_B[c2][c8 - 1];
+      }
+
+      // Loop 2: X update (forward sweep)
+      for (int c8 = 1; c8 <= N - 1; c8++) { // Iterate through columns
+        restrict_X[c2][c8] = restrict_X[c2][c8] - restrict_X[c2][c8 - 1] * restrict_A[c2][c8] / restrict_B[c2][c8 - 1];
+      }
+
+      // Loop 3: X update (backward sweep)
+      // The original loop iterates `c8` from 0 to N-3.
+      // The indices are `N - c8 - 2`, `N - 2 - c8`, `N - 2 - c8 - 1`, `N - c8 - 3`, `N - 3 - c8`.
+      // These are preserved exactly to maintain functional equivalence.
+      for (int c8 = 0; c8 <= N - 3; c8++) {
+        restrict_X[c2][N - c8 - 2] = (restrict_X[c2][N - 2 - c8] - restrict_X[c2][N - 2 - c8 - 1] * restrict_A[c2][N - c8 - 3]) / restrict_B[c2][N - 3 - c8];
+      }
+    }
+
+    // Loop 4: X update for the last column (scalar division)
+    for (int c2 = 0; c2 <= N - 1; c2++) {
+      restrict_X[c2][N - 1] = restrict_X[c2][N - 1] / restrict_B[c2][N - 1];
+    }
+
+    // Phase 2: Column-wise operations (forward and backward sweeps)
+    // These loops access memory with a stride of N (column-major access), which is cache-unfriendly.
+    // Loop tiling is applied to the outer `c2` loop (column index) to improve cache reuse.
+    // By processing a block of columns at a time, data for these columns might stay in cache
+    // as the inner `c8` loop (row index) sweeps through them.
+    for (int c2_block = 0; c2_block < N; c2_block += BLOCK_SIZE) {
+      // Loop 5: B update (forward sweep)
+      // The recurrence is on `c8` (row index), so `c8` must be the outer loop within the tile.
+      for (int c8 = 1; c8 <= N - 1; c8++) {
+        // The innermost loop iterates over a block of columns.
+        // This loop can be vectorized by the compiler as there are no dependencies across `c2` iterations.
+        for (int c2 = c2_block; c2 < std::min(c2_block + BLOCK_SIZE, N); c2++) {
+          restrict_B[c8][c2] = restrict_B[c8][c2] - restrict_A[c8][c2] * restrict_A[c8][c2] / restrict_B[c8 - 1][c2];
+        }
+      }
+
+      // Loop 6: X update (forward sweep)
+      // Recurrence on `c8`.
+      for (int c8 = 1; c8 <= N - 1; c8++) {
+        for (int c2 = c2_block; c2 < std::min(c2_block + BLOCK_SIZE, N); c2++) {
+          restrict_X[c8][c2] = restrict_X[c8][c2] - restrict_X[c8 - 1][c2] * restrict_A[c8][c2] / restrict_B[c8 - 1][c2];
+        }
+      }
+
+      // Loop 7: X update (backward sweep)
+      // Recurrence on `c8`. Indices are preserved exactly.
+      for (int c8 = 0; c8 <= N - 3; c8++) {
+        for (int c2 = c2_block; c2 < std::min(c2_block + BLOCK_SIZE, N); c2++) {
+          restrict_X[N - 2 - c8][c2] = (restrict_X[N - 2 - c8][c2] - restrict_X[N - c8 - 3][c2] * restrict_A[N - 3 - c8][c2]) / restrict_B[N - 2 - c8][c2];
+        }
+      }
+    }
+
+    // Loop 8: X update for the last row (scalar division)
+    // This loop also benefits from tiling for cache efficiency.
+    for (int c2_block = 0; c2_block < N; c2_block += BLOCK_SIZE) {
+      for (int c2 = c2_block; c2 < std::min(c2_block + BLOCK_SIZE, N); c2++) {
+        restrict_X[N - 1][c2] = restrict_X[N - 1][c2] / restrict_B[N - 1][c2];
+      }
+    }
+  }
+}

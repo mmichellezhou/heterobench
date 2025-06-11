@@ -1,0 +1,60 @@
+```cpp
+/*
+ * (C) Copyright [2024] Hewlett Packard Enterprise Development LP
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the Software),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included
+ * in all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+ 
+#include "cpu_impl.h"
+
+using namespace std;
+
+void kernel_3m_0(double A[NI + 0][NK + 0], double B[NK + 0][NJ + 0], double E[NI + 0][NJ + 0])
+{
+  int c1; // Loop variable for NI dimension (rows of A and E)
+  int c2; // Loop variable for NJ dimension (columns of B and E)
+  int c5; // Loop variable for NK dimension (columns of A and rows of B)
+
+  // Original loop order: c1 (NI), c2 (NJ), c5 (NK)
+  // This order results in column-major access for matrix B (B[c5][c2]) in the innermost loop,
+  // which is inefficient for cache performance when B is stored in row-major order.
+  // E[c1][c2] is also a scalar accumulation in the innermost loop.
+
+  // Optimized loop order: c1 (NI), c5 (NK), c2 (NJ)
+  // This reordering significantly improves memory access patterns for B and E.
+  // In the innermost 'c2' loop, both B[c5][c2] and E[c1][c2] are accessed contiguously
+  // (row-major), which is highly cache-friendly and enables effective auto-vectorization
+  // by modern compilers.
+  // A[c1][c5] becomes loop-invariant in the innermost loop, allowing it to be loaded once.
+
+  for (c1 = 0; c1 < NI; c1++) { // Outer loop: iterates over rows of A and E
+    for (c5 = 0; c5 < NK; c5++) { // Middle loop: iterates over columns of A and rows of B
+      // A[c1][c5] is constant within the innermost 'c2' loop.
+      // Loading it once into a local variable (which the compiler will likely place in a register)
+      // minimizes redundant memory fetches.
+      double val_A_c1_c5 = A[c1][c5];
+
+      for (c2 = 0; c2 < NJ; c2++) { // Innermost loop: iterates over columns of B and E
+        // E[c1][c2] and B[c5][c2] are accessed contiguously (row-major) in this loop.
+        E[c1][c2] += val_A_c1_c5 * B[c5][c2];
+      }
+    }
+  }
+}
+```

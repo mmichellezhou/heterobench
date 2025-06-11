@@ -1,0 +1,21 @@
+EXECUTION COMMAND:
+
+
+STDOUT:
+=======================================
+Running adi benchmark C++ Serial
+=======================================
+Running 1 warm up iteration ...
+Done
+Checking results ...
+Output is correct!
+Done
+Running 1 iterations ...
+Done
+1 warm up iteration and 1 iterations 
+Single iteration time: 709.166 ms
+Init array time: 2.05117 ms
+Kernel adi time: 707.105 ms
+
+
+STDERR:

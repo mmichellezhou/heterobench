@@ -1,0 +1,70 @@
+```cpp
+/*
+ * (C) Copyright [2024] Hewlett Packard Enterprise Development LP
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the Software),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included
+ * in all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+ 
+#include "cpu_impl.h"
+#include <algorithm> // Required for std::min
+
+using namespace std;
+
+void kernel_3m_1(double C[NJ + 0][NM + 0], double D[NM + 0][NL + 0], double F[NJ + 0][NL + 0])
+{
+  // Optimized loop order: ikj (i, k, j) with j-tiling
+  // Original loop order was ijk (c1, c2, c5)
+  // The ikj order (c1, c5, c2) improves cache locality for all matrices
+  // by accessing C row-wise, D row-wise, and F row-wise.
+
+  int c1; // Corresponds to 'i' (row index for F and C)
+  int c2; // Corresponds to 'j' (column index for F and D)
+  int c5; // Corresponds to 'k' (inner dimension index for C and D)
+
+  // Define a block size for the 'j' (c2) dimension.
+  // This helps to keep blocks of F and D in cache, improving data reuse.
+  // A block size of 64 doubles (512 bytes) is a common choice,
+  // as it's a multiple of typical cache line sizes (64 bytes) and fits well within L1 cache.
+  const int BLOCK_SIZE_J = 64; 
+
+  // Loop over rows of F and C (i dimension)
+  for (c1 = 0; c1 < NJ; c1++) {
+    // Loop over the inner dimension (k dimension)
+    for (c5 = 0; c5 < NM; c5++) {
+      // Cache the value of C[c1][c5] as it is reused across the innermost loop.
+      // This reduces redundant memory loads.
+      double c_val = C[c1][c5];
+
+      // Tile the innermost loop (j dimension) for improved cache performance.
+      // This ensures that accesses to F[c1][c2] and D[c5][c2] are localized
+      // within a cache-friendly block.
+      for (int c2_block = 0; c2_block < NL; c2_block += BLOCK_SIZE_J) {
+        // Loop over columns of F and D within the current block (j dimension)
+        // std::min handles the boundary case where NL is not a multiple of BLOCK_SIZE_J.
+        for (c2 = c2_block; c2 < std::min(c2_block + BLOCK_SIZE_J, NL); c2++) {
+          // Perform the matrix multiplication accumulation.
+          // This innermost loop is highly amenable to auto-vectorization (SIMD) by the compiler.
+          F[c1][c2] += c_val * D[c5][c2];
+        }
+      }
+    }
+  }
+}
+
+```

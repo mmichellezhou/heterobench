@@ -1,0 +1,32 @@
+{
+  "kernel_name": "alternating_direction_implicit",
+  "original_files": {
+    "main": "benchmarks/alternating_direction_implicit/homobackend_cpu/Cpp/main.cpp",
+    "kernels": [
+      "benchmarks/alternating_direction_implicit/homobackend_cpu/Cpp/cpu_impl/kernel_adi.cpp"
+    ],
+    "headers": [
+      "benchmarks/alternating_direction_implicit/homobackend_cpu/Cpp/cpu_impl/include/cpu_impl.h"
+    ]
+  },
+  "status": {
+    "kernel_generation_success": true,
+    "compilation_success": true,
+    "execution_success": true
+  },
+  "statistics": {
+    "num_files_optimized": 2,
+    "files_optimized": [
+      "init_array.cpp",
+      "kernel_adi.cpp"
+    ],
+    "optimization_success": true
+  },
+  "compilation_details": {
+    "compile_output_length": 0,
+    "compile_error_length": 0,
+    "run_output_length": 353,
+    "run_error_length": 0
+  },
+  "speedup": 4.1277782634813285
+}

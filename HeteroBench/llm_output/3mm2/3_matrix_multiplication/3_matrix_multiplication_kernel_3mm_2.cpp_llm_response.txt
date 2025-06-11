@@ -1,0 +1,124 @@
+```cpp
+/*
+ * (C) Copyright [2024] Hewlett Packard Enterprise Development LP
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the Software),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included
+ * in all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+ 
+#include "cpu_impl.h"
+#include <immintrin.h> // For AVX intrinsics (e.g., _mm256_pd, _mm256_fmadd_pd)
+#include <algorithm>   // For std::min
+
+using namespace std;
+
+// Define tile sizes for cache blocking. These are heuristic values
+// that typically perform well on modern CPUs by improving cache reuse.
+// Optimal values may vary based on specific CPU architecture and cache sizes.
+#ifndef BLOCK_C1
+#define BLOCK_C1 32 // Tile size for NI dimension (rows of G and E)
+#endif
+#ifndef BLOCK_C2
+#define BLOCK_C2 32 // Tile size for NJ dimension (columns of E, rows of F)
+#endif
+#ifndef BLOCK_C6
+#define BLOCK_C6 32 // Tile size for NL dimension (columns of G and F)
+#endif
+
+// Vectorization constant for double precision floating-point numbers.
+// For AVX2 (256-bit registers), a __m256d vector holds 4 doubles.
+// For AVX512 (512-bit registers), this would be 8.
+#define VEC_DOUBLES 4 
+
+// Unroll factor for the c1 loop (rows of G).
+// This allows processing multiple rows of G simultaneously,
+// increasing register reuse and instruction-level parallelism within the inner loops.
+#define UNROLL_C1 4 
+
+void kernel_3m_2(double E[NI + 0][NJ + 0], double F[NJ + 0][NL + 0], double G[NI + 0][NL + 0])
+{
+  int c1, c2, c6;
+  int c1_block, c2_block, c6_block;
+
+  // Outer loops for cache tiling. This strategy iterates over blocks of G,
+  // accumulating contributions from corresponding blocks of E and F.
+  for (c1_block = 0; c1_block < NI; c1_block += BLOCK_C1) {
+    for (c6_block = 0; c6_block < NL; c6_block += BLOCK_C6) {
+      for (c2_block = 0; c2_block < NJ; c2_block += BLOCK_C2) {
+        // Inner loops for computation within the current blocks.
+        // The c1 loop is unrolled by UNROLL_C1 to process multiple rows of G concurrently.
+        // The loop bound `std::min(..., NI) - (UNROLL_C1 - 1)` ensures that the unrolled loop
+        // does not go out of bounds, leaving the remaining iterations to the scalar remainder loop.
+        for (c1 = c1_block; c1 < std::min(c1_block + BLOCK_C1, NI) - (UNROLL_C1 - 1); c1 += UNROLL_C1) {
+          for (c2 = c2_block; c2 < std::min(c2_block + BLOCK_C2, NJ); c2++) {
+            // Load E values for UNROLL_C1 rows. These are scalars with respect to the c6 loop.
+            // They are broadcasted into SIMD registers for multiplication.
+            double E_val[UNROLL_C1];
+            __m256d E_vec[UNROLL_C1];
+            for (int u = 0; u < UNROLL_C1; ++u) {
+              E_val[u] = E[c1 + u][c2];
+              E_vec[u] = _mm256_set1_pd(E_val[u]); // Broadcast scalar E_val to all elements of vector
+            }
+
+            // Vectorized loop for c6 (columns of G and F).
+            // Processes VEC_DOUBLES elements at a time using SIMD instructions.
+            // The loop bound `std::min(..., NL) - (VEC_DOUBLES - 1)` handles alignment for vector loads.
+            for (c6 = c6_block; c6 < std::min(c6_block + BLOCK_C6, NL) - (VEC_DOUBLES - 1); c6 += VEC_DOUBLES) {
+              __m256d F_vec = _mm256_loadu_pd(&F[c2][c6]); // Load a vector segment of F (unaligned load)
+
+              // Perform Fused Multiply-Add (FMA) for each unrolled c1 row.
+              // This computes G_vec = G_vec + E_vec * F_vec.
+              for (int u = 0; u < UNROLL_C1; ++u) {
+                __m256d G_vec = _mm256_loadu_pd(&G[c1 + u][c6]); // Load a vector segment of G
+                G_vec = _mm256_fmadd_pd(E_vec[u], F_vec, G_vec); // FMA operation
+                _mm256_storeu_pd(&G[c1 + u][c6], G_vec);         // Store back to G (unaligned store)
+              }
+            }
+
+            // Handle remainder for c6 loop (scalar operations).
+            // This loop processes any remaining columns that don't fit into a full vector.
+            for (; c6 < std::min(c6_block + BLOCK_C6, NL); c6++) {
+              for (int u = 0; u < UNROLL_C1; ++u) {
+                G[c1 + u][c6] += E_val[u] * F[c2][c6];
+              }
+            }
+          }
+        }
+        // Handle remainder for c1 loop (rows that don't fit into UNROLL_C1).
+        // These rows are processed one by one, but still with the vectorized c6 loop.
+        for (; c1 < std::min(c1_block + BLOCK_C1, NI); c1++) {
+          for (c2 = c2_block; c2 < std::min(c2_block + BLOCK_C2, NJ); c2++) {
+            double E_val = E[c1][c2];
+            __m256d E_vec = _mm256_set1_pd(E_val);
+
+            for (c6 = c6_block; c6 < std::min(c6_block + BLOCK_C6, NL) - (VEC_DOUBLES - 1); c6 += VEC_DOUBLES) {
+              __m256d F_vec = _mm256_loadu_pd(&F[c2][c6]);
+              __m256d G_vec = _mm256_loadu_pd(&G[c1][c6]);
+              G_vec = _mm256_fmadd_pd(E_vec, F_vec, G_vec);
+              _mm256_storeu_pd(&G[c1][c6], G_vec);
+            }
+            for (; c6 < std::min(c6_block + BLOCK_C6, NL); c6++) {
+              G[c1][c6] += E_val * F[c2][c6];
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```

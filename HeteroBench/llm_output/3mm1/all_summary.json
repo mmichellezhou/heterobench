@@ -1,0 +1,8 @@
+{
+  "3_matrix_multiplication": {
+    "kernel_generation_success": true,
+    "compilation_success": true,
+    "execution_success": true,
+    "speedup": 19.5952740861383
+  }
+}

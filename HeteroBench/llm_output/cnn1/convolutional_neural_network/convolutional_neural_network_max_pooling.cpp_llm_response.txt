@@ -1,0 +1,127 @@
+```cpp
+/*
+ * (C) Copyright [2024] Hewlett Packard Enterprise Development LP
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the Software),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included
+ * in all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+ 
+#include "cpu_impl.h"
+#include <iostream>
+#include <math.h> // For std::max, though <algorithm> is more common for it
+#include <immintrin.h> // For AVX intrinsics
+
+// Use std::max from <algorithm> or <math.h> (if using namespace std;)
+// The original code uses `max` with `using namespace std;`, which resolves to `std::max`.
+// We will continue to use `std::max`.
+using namespace std;
+
+/* This is the Cpp implementation of the following Python code */
+/* Here the input and output are 2D arraies */
+/*
+def max_pooling(input, pool_size, pool_stride=2):
+  output_height = (input.shape[0] - pool_size) // pool_stride + 1
+  output_width = (input.shape[1] - pool_size) // pool_stride + 1
+  output = np.zeros((output_height, output_width))
+  for i in range(0, output_height):
+    for j in range(0, output_width):
+      region = input[i*pool_stride:i*pool_stride+pool_size, j*pool_stride:j*pool_stride+pool_size]
+      output[i, j] = np.max(region)
+  return output
+*/
+
+void max_pooling(double *max_pooling_input, int pool_size, int pool_stride, int input_h, int input_w, double *max_pooling_output) {
+  int output_h = (input_h - pool_size) / pool_stride + 1;
+  int output_w = (input_w - pool_size) / pool_stride + 1;
+
+  // The original code initializes `max_val = 0;`. This implies that either:
+  // 1. Input values are guaranteed to be non-negative.
+  // 2. Negative maximums should be clamped to 0.
+  // To maintain functional equivalence, we stick to 0.0 as the initial maximum.
+  const double initial_max_val = 0.0;
+
+  // Vector width for __m256d (AVX, 4 doubles)
+  const int vector_width = 4;
+
+  for (int i = 0; i < output_h; i++) {
+    // Pre-calculate the base row index for the input window to reduce arithmetic in inner loops
+    int input_row_start_base = i * pool_stride;
+    // Pre-calculate the base row index for the output array
+    int output_row_idx = i * output_w;
+
+    for (int j = 0; j < output_w; j++) {
+      // Pre-calculate the base column index for the input window
+      int input_col_start_base = j * pool_stride;
+
+      // Initialize scalar max_val for this output pixel.
+      // This will hold the maximum from any scalar (tail) processing.
+      double current_pixel_max_val = initial_max_val;
+
+      // Initialize vector max_val. This will hold the maximum from vectorized processing.
+      __m256d vec_max_val = _mm256_set1_pd(initial_max_val);
+
+      for (int k = 0; k < pool_size; k++) {
+        // Calculate the starting memory address of the current row within the input window.
+        // This avoids recalculating `(input_row_start_base + k) * input_w` repeatedly inside the 'l' loop.
+        double* current_input_row_ptr = max_pooling_input + (input_row_start_base + k) * input_w;
+
+        // Vectorized part for 'l' loop (columns within the pooling window)
+        int l = 0;
+        // Process elements in chunks of `vector_width` (4 doubles) using AVX intrinsics
+        for (; l + vector_width <= pool_size; l += vector_width) {
+            // Load 4 doubles from input. `_mm256_loadu_pd` is used for unaligned loads,
+            // which is safer as input array alignment is not guaranteed.
+            __m256d input_vec = _mm256_loadu_pd(current_input_row_ptr + input_col_start_base + l);
+            // Perform element-wise maximum between the current vector max and the loaded input vector
+            vec_max_val = _mm256_max_pd(vec_max_val, input_vec);
+        }
+
+        // Scalar tail processing for 'l' loop
+        // Handle any remaining elements if pool_size is not a multiple of vector_width
+        for (; l < pool_size; ++l) {
+            current_pixel_max_val = max(current_pixel_max_val, current_input_row_ptr[input_col_start_base + l]);
+        }
+      }
+
+      // Horizontal reduction of `vec_max_val` to a single double.
+      // This combines the 4 maximums stored in the `__m256d` vector into one scalar maximum.
+      __m256d v = vec_max_val;
+      // Step 1: Max of lower 128-bit lane with upper 128-bit lane.
+      // This effectively computes max(v[0],v[4]), max(v[1],v[5]), max(v[2],v[6]), max(v[3],v[7])
+      // and stores them in the lower 128-bit lane of `v`.
+      __m256d v_perm = _mm256_permute2f128_pd(v, v, 1); // Swap 128-bit lanes
+      v = _mm256_max_pd(v, v_perm); 
+
+      // Step 2: Max of the two doubles in the remaining lower 128-bit lane.
+      // This computes max(v[0],v[1]) and stores it in v[0].
+      __m128d v128 = _mm256_castpd256_pd128(v); // Extract lower 128-bit lane
+      __m128d v128_shuf = _mm_shuffle_pd(v128, v128, 0x1); // Shuffle to get v128[1] into v128[0]
+      v128 = _mm_max_pd(v128, v128_shuf); // v128[0] now holds the overall maximum from the vector
+
+      // Extract the final scalar double result from the vector
+      double final_vec_max = _mm_cvtsd_f64(v128);
+
+      // Combine the maximum found by scalar processing and the maximum found by vectorized processing
+      current_pixel_max_val = max(current_pixel_max_val, final_vec_max);
+
+      // Store the final maximum value for the current output pixel
+      max_pooling_output[output_row_idx + j] = current_pixel_max_val;
+    }
+  }
+}
+```

@@ -1,0 +1,70 @@
+```cpp
+/*
+ * (C) Copyright [2024] Hewlett Packard Enterprise Development LP
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the Software),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included
+ * in all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+ 
+#include "cpu_impl.h"
+#include <algorithm> // Required for std::min
+#include <omp.h>     // Required for OpenMP pragmas for SIMD vectorization
+
+using namespace std;
+
+void kernel_3m_2(double E[NI + 0][NJ + 0], double F[NJ + 0][NL + 0], double G[NI + 0][NL + 0])
+{
+  // Define tile sizes for loop tiling.
+  // These values are chosen to promote cache reuse by keeping active data
+  // blocks within L1/L2 cache. For typical cache sizes (e.g., 32KB-64KB L1D),
+  // a 64x64 block of doubles (32KB) is a good fit.
+  // NI, NJ, NL are defined as 1024, so 64 is a good divisor (1024/64 = 16).
+  const int TILE_SIZE_I = 64; // Tile size for NI dimension (rows of E, G)
+  const int TILE_SIZE_K = 64; // Tile size for NJ dimension (columns of E, rows of F)
+  const int TILE_SIZE_J = 64; // Tile size for NL dimension (columns of F, G)
+
+  // Loop tiling for improved cache locality.
+  // The outer loops iterate over blocks of the matrices.
+  // The order of block loops (c1_b, c2_b, c6_b) is chosen to optimize data reuse
+  // across the inner loops.
+  for (int c1_b = 0; c1_b < NI; c1_b += TILE_SIZE_I) { // Block loop for NI (i-dimension)
+    for (int c2_b = 0; c2_b < NJ; c2_b += TILE_SIZE_K) { // Block loop for NJ (k-dimension)
+      for (int c6_b = 0; c6_b < NL; c6_b += TILE_SIZE_J) { // Block loop for NL (j-dimension)
+        // Inner loops operate on the current tiles.
+        // The loop order (c1, c2, c6) is maintained from the original for good
+        // row-major access patterns within the tiles.
+        for (int c1 = c1_b; c1 < std::min(c1_b + TILE_SIZE_I, NI); ++c1) {
+          for (int c2 = c2_b; c2 < std::min(c2_b + TILE_SIZE_K, NJ); ++c2) {
+            // Innermost loop for c6 (j-dimension) is vectorized.
+            // The #pragma omp simd directive instructs the compiler to generate
+            // SIMD (Single Instruction, Multiple Data) instructions for this loop.
+            // This is highly effective because G[c1][c6] and F[c2][c6] are accessed
+            // contiguously in memory (row-major order), allowing for efficient
+            // vectorized loads, stores, and arithmetic operations.
+            // E[c1][c2] acts as a scalar multiplier within this loop.
+            #pragma omp simd
+            for (int c6 = c6_b; c6 < std::min(c6_b + TILE_SIZE_J, NL); ++c6) {
+              G[c1][c6] += E[c1][c2] * F[c2][c6];
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```

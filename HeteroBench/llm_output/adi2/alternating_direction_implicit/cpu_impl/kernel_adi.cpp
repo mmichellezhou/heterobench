@@ -1,0 +1,110 @@
+/*
+ * (C) Copyright [2024] Hewlett Packard Enterprise Development LP
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the Software),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included
+ * in all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, FROM OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+ 
+#include "cpu_impl.h"
+
+// Using namespace std; is kept for consistency with the original code.
+using namespace std;
+
+void kernel_adi(int tsteps, int n, double X[N + 0][N + 0], double A[N + 0][N + 0], double B[N + 0][N + 0])
+{
+  // The parameters `tsteps` and `n` are redundant if `TSTEPS` and `N` are used,
+  // but their presence in the signature is maintained as per requirements.
+  // `N` and `TSTEPS` are assumed to be compile-time constants defined in `cpu_impl.h`.
+
+  // Declare temporary buffers for column-wise operations.
+  // These buffers will hold a single column of data contiguously,
+  // improving cache locality for the inner loops during column processing.
+  // Using `static` to ensure they are allocated in static storage,
+  // preventing potential stack overflow for large `N` and avoiding
+  // repeated allocation/deallocation overhead per `c2` iteration.
+  static double B_col[N];
+  static double A_col[N];
+  static double X_col[N];
+
+  for (int c0 = 0; c0 <= TSTEPS; c0++) {
+    // Phase 1: Row-wise operations
+    // These loops already exhibit good cache locality because the innermost
+    // `c8` loop accesses elements contiguously in memory (row-major order).
+    // Compiler optimizations (e.g., auto-vectorization, loop unrolling)
+    // are expected to handle these efficiently.
+    for (int c2 = 0; c2 <= N - 1; c2++) {
+      // Loop 1: Forward sweep for B
+      for (int c8 = 1; c8 <= N - 1; c8++) {
+        B[c2][c8] = B[c2][c8] - A[c2][c8] * A[c2][c8] / B[c2][c8 - 1];
+      }
+      // Loop 2: Forward sweep for X
+      for (int c8 = 1; c8 <= N - 1; c8++) {
+        X[c2][c8] = X[c2][c8] - X[c2][c8 - 1] * A[c2][c8] / B[c2][c8 - 1];
+      }
+      // Loop 3: Backward sweep for X
+      for (int c8 = 0; c8 <= N - 3; c8++) {
+        X[c2][N - c8 - 2] = (X[c2][N - 2 - c8] - X[c2][N - 2 - c8 - 1] * A[c2][N - c8 - 3]) / B[c2][N - 3 - c8];
+      }
+    }
+    // Loop 4: Final division for X (last element of row)
+    for (int c2 = 0; c2 <= N - 1; c2++) {
+      X[c2][N - 1] = X[c2][N - 1] / B[c2][N - 1];
+    }
+
+    // Phase 2: Column-wise operations
+    // This section is optimized using explicit buffering to improve memory access patterns.
+    // Original column-wise accesses (e.g., B[c8][c2]) are strided in row-major memory layout,
+    // leading to poor cache performance. By loading a full column into a temporary
+    // contiguous buffer, the inner loops operate on cache-friendly data.
+    for (int c2 = 0; c2 <= N - 1; c2++) { // Iterate over columns
+      // Load column `c2` from the main arrays into temporary 1D buffers.
+      // These are strided reads from the main arrays, but they are performed once per column.
+      for (int i = 0; i < N; ++i) {
+        B_col[i] = B[i][c2];
+        A_col[i] = A[i][c2];
+        X_col[i] = X[i][c2];
+      }
+
+      // Loop 5: Forward sweep for B
+      // Now operating on contiguous `B_col` and `A_col`, improving cache hits.
+      for (int c8 = 1; c8 <= N - 1; c8++) {
+        B_col[c8] = B_col[c8] - A_col[c8] * A_col[c8] / B_col[c8 - 1];
+      }
+      // Loop 6: Forward sweep for X
+      // Now operating on contiguous `X_col`, `A_col`, and `B_col`.
+      for (int c8 = 1; c8 <= N - 1; c8++) {
+        X_col[c8] = X_col[c8] - X_col[c8 - 1] * A_col[c8] / B_col[c8 - 1];
+      }
+      // Loop 7: Backward sweep for X
+      // Now operating on contiguous `X_col`, `A_col`, and `B_col`.
+      for (int c8 = 0; c8 <= N - 3; c8++) {
+        X_col[N - 2 - c8] = (X_col[N - 2 - c8] - X_col[N - c8 - 3] * A_col[N - 3 - c8]) / B_col[N - 2 - c8];
+      }
+
+      // Loop 8: Final division for X (last element of column)
+      X_col[N - 1] = X_col[N - 1] / B_col[N - 1];
+
+      // Write back the modified column data from temporary 1D buffers to the main arrays.
+      // These are strided writes, but again, performed once per column.
+      for (int i = 0; i < N; ++i) {
+        B[i][c2] = B_col[i];
+        X[i][c2] = X_col[i]; // Array A is not modified in column-wise operations
+      }
+    }
+  }
+}

@@ -1,0 +1,106 @@
+/*
+ * (C) Copyright [2024] Hewlett Packard Enterprise Development LP
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the Software),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included
+ * in all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+ 
+#include "cpu_impl.h"
+#include <immintrin.h> // For AVX intrinsics (e.g., _mm256_*)
+
+// N is typically defined in cpu_impl.h, e.g., #define N 1024
+
+// This function initializes three 2D arrays X, A, and B of size N x N.
+// It is optimized for single-threaded performance using:
+// 1. Strength Reduction: Division by 'n' is replaced by multiplication by '1.0/n'.
+// 2. Vectorization (SIMD): Utilizes AVX (256-bit) intrinsics to process 4 double-precision
+//    floating-point numbers at a time for the inner loop.
+// 3. Fused Multiply-Add (FMA): Leverages _mm256_fmadd_pd for improved throughput and precision.
+// 4. Memory Access Optimization: Uses aligned stores (_mm256_store_pd) assuming arrays
+//    are sufficiently aligned (e.g., 32-byte aligned for AVX) and N is a multiple of 4.
+//    If alignment is not guaranteed, _mm256_storeu_pd (unaligned store) could be used,
+//    but might be slower. For typical N values like 1024, static array rows are often aligned.
+
+void init_array(int n,double X[N + 0][N + 0],double A[N + 0][N + 0],double B[N + 0][N + 0])
+{
+  // Using size_t for loop counters for robustness, though int is functionally equivalent for N=1024.
+  size_t c1;
+  size_t c2;
+
+  // Original code's check for n >= 1. If n is 0, loops won't execute.
+  if (n >= 1) {
+    // Strength reduction: Precompute 1.0 / n as a double and a broadcasted SIMD vector.
+    const double inv_n = 1.0 / static_cast<double>(n);
+    const __m256d v_inv_n = _mm256_set1_pd(inv_n); // Broadcast inv_n to all elements of a vector
+
+    for (c1 = 0; c1 < n; c1++) { // Outer loop iterates through rows
+      const double dc1 = static_cast<double>(c1);
+      const __m256d v_dc1 = _mm256_set1_pd(dc1); // Broadcast dc1 for vector operations
+
+      // Precompute constant terms for the FMA operations for the current row (c1).
+      // These terms are (dc1 + 1), (2*dc1 + 2), and (3*dc1 + 3).
+      const __m256d v_dc1_plus_1 = _mm256_set1_pd(dc1 + 1.0);
+      const __m256d v_2dc1_plus_2 = _mm256_set1_pd(2.0 * dc1 + 2.0);
+      const __m256d v_3dc1_plus_3 = _mm256_set1_pd(3.0 * dc1 + 3.0);
+
+      // Vectorized loop for c2 (inner loop)
+      // Processes 4 double-precision elements per iteration using AVX (256-bit registers).
+      // Loop runs up to n - 4 to ensure full vector chunks.
+      for (c2 = 0; c2 <= n - 4; c2 += 4) {
+        // Create a vector of column indices (c2, c2+1, c2+2, c2+3).
+        // _mm256_set_pd takes arguments in reverse order (highest index first).
+        const __m256d v_c2_vals = _mm256_set_pd(static_cast<double>(c2 + 3), 
+                                                static_cast<double>(c2 + 2), 
+                                                static_cast<double>(c2 + 1), 
+                                                static_cast<double>(c2 + 0));
+        
+        // Calculate X[c1][c2] values: (dc1 * (c2 + 1) + 1) * inv_n
+        // Rearranged to: (dc1 * c2_vals + (dc1 + 1)) * inv_n
+        // Using FMA: _mm256_fmadd_pd(a, b, c) computes a*b + c
+        __m256d v_res_X_inner = _mm256_fmadd_pd(v_dc1, v_c2_vals, v_dc1_plus_1);
+        __m256d v_res_X = _mm256_mul_pd(v_res_X_inner, v_inv_n);
+
+        // Calculate A[c1][c2] values: (dc1 * (c2 + 2) + 2) * inv_n
+        // Rearranged to: (dc1 * c2_vals + (2*dc1 + 2)) * inv_n
+        __m256d v_res_A_inner = _mm256_fmadd_pd(v_dc1, v_c2_vals, v_2dc1_plus_2);
+        __m256d v_res_A = _mm256_mul_pd(v_res_A_inner, v_inv_n);
+
+        // Calculate B[c1][c2] values: (dc1 * (c2 + 3) + 3) * inv_n
+        // Rearranged to: (dc1 * c2_vals + (3*dc1 + 3)) * inv_n
+        __m256d v_res_B_inner = _mm256_fmadd_pd(v_dc1, v_c2_vals, v_3dc1_plus_3);
+        __m256d v_res_B = _mm256_mul_pd(v_res_B_inner, v_inv_n);
+
+        // Store the computed vector results back to memory.
+        // _mm256_store_pd requires the memory address to be 32-byte aligned.
+        // For N=1024 (a multiple of 4 and 8), if the base arrays X, A, B are aligned,
+        // then X[c1][c2] will be aligned when c2 is a multiple of 4.
+        _mm256_store_pd(&X[c1][c2], v_res_X);
+        _mm256_store_pd(&A[c1][c2], v_res_A);
+        _mm256_store_pd(&B[c1][c2], v_res_B);
+      }
+
+      // Scalar remainder loop for c2 (if n is not a multiple of 4)
+      // This loop handles the remaining elements that couldn't be processed by the vectorized loop.
+      for (; c2 < n; c2++) {
+        X[c1][c2] = (dc1 * (static_cast<double>(c2) + 1.0) + 1.0) * inv_n;
+        A[c1][c2] = (dc1 * (static_cast<double>(c2) + 2.0) + 2.0) * inv_n;
+        B[c1][c2] = (dc1 * (static_cast<double>(c2) + 3.0) + 3.0) * inv_n;
+      }
+    }
+  }
+}

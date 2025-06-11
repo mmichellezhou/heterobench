@@ -1,0 +1,21 @@
+EXECUTION COMMAND:
+
+
+STDOUT:
+=======================================
+Running 3mm benchmark C++ Serial
+=======================================
+Running 1 warm up iteration ...
+Done
+Checking results ...
+Done
+Running 1 iterations ...
+Done
+1 warm up iteration and 1 iterations 
+Single iteration time: 794.513 ms
+Kernel 3mm 0 time: 252.94 ms
+Kernel 3mm 1 time: 341.099 ms
+Kernel 3mm 2 time: 200.46 ms
+
+
+STDERR:

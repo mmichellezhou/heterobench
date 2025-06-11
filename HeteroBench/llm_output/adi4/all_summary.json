@@ -1,0 +1,8 @@
+{
+  "alternating_direction_implicit": {
+    "kernel_generation_success": true,
+    "compilation_success": true,
+    "execution_success": true,
+    "speedup": 1.3508633424354273
+  }
+}

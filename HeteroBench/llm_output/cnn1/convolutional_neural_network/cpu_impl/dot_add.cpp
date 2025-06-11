@@ -1,0 +1,115 @@
+/*
+ * (C) Copyright [2024] Hewlett Packard Enterprise Development LP
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the Software),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included
+ * in all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+ 
+#include "cpu_impl.h"
+#include <iostream>
+#include <math.h>
+#include <immintrin.h> // For AVX intrinsics (e.g., _mm256_pd, _mm256_fmadd_pd)
+
+void dot_add(double *dot_add_input_x, double *dot_add_input_W, double *dot_add_input_b, double *dot_add_output, int x_h, int x_w, int W_h, int W_w) {
+  // Phase 1: Matrix multiplication (X * W)
+  // The original code computes C[i][j] = sum(A[i][k] * B[k][j]) using an ijk loop order.
+  // This optimized version uses an ikj loop order, which is generally more cache-friendly
+  // for row-major matrices, especially for the B (W) matrix and the output matrix.
+  // The innermost loop (j) now accesses contiguous memory for W and output,
+  // making it suitable for SIMD vectorization.
+
+  // Initialize output to zero. This is crucial because the ikj loop order accumulates
+  // results into dot_add_output, whereas the original ijk order uses a temporary
+  // variable 'tmp' that is reset for each output element.
+  for (int i = 0; i < x_h; i++) {
+    double* output_row_ptr = &dot_add_output[i * W_w];
+    int j = 0;
+    // Vectorized initialization of 4 doubles at a time using AVX
+    for (; j + 3 < W_w; j += 4) {
+      _mm256_storeu_pd(output_row_ptr + j, _mm256_setzero_pd());
+    }
+    // Handle remaining elements (tail loop) for initialization
+    for (; j < W_w; j++) {
+      output_row_ptr[j] = 0.0;
+    }
+  }
+
+  // Main matrix multiplication loop (ikj order)
+  for (int i = 0; i < x_h; i++) {
+    // Pointer to the current row of the output matrix
+    double* output_row_ptr = &dot_add_output[i * W_w];
+    // Pointer to the current row of the input matrix x
+    double* x_row_ptr = &dot_add_input_x[i * x_w];
+
+    for (int k = 0; k < x_w; k++) {
+      // Load x[i][k] once per k-loop iteration
+      double x_val = x_row_ptr[k]; 
+      // Broadcast x_val to all elements of an AVX register
+      __m256d x_vec = _mm256_set1_pd(x_val); 
+
+      // Pointer to the k-th row of the input matrix W (which corresponds to the k-th column of W in the original ijk view)
+      double* W_k_row_ptr = &dot_add_input_W[k * W_w];
+
+      int j = 0;
+      // Vectorized part of the innermost j loop using AVX (4 doubles at a time)
+      // Fused Multiply-Add (FMA) instruction is used for higher performance and precision.
+      for (; j + 3 < W_w; j += 4) { 
+        // Load 4 doubles from W[k][j...j+3]
+        __m256d W_vec = _mm256_loadu_pd(W_k_row_ptr + j); 
+        // Load 4 doubles from output[i][j...j+3] (current accumulated sum)
+        __m256d output_vec = _mm256_loadu_pd(output_row_ptr + j); 
+
+        // Perform (x_vec * W_vec) + output_vec using FMA
+        output_vec = _mm256_fmadd_pd(x_vec, W_vec, output_vec);
+
+        // Store the result back to output[i][j...j+3]
+        _mm256_storeu_pd(output_row_ptr + j, output_vec); 
+      }
+
+      // Handle remaining elements (tail loop) for j, if W_w is not a multiple of 4
+      for (; j < W_w; j++) {
+        output_row_ptr[j] += x_val * W_k_row_ptr[j];
+      }
+    }
+  }
+
+  // Phase 2: Add bias (b)
+  // This loop adds the bias vector 'b' to each row of the computed matrix (X * W).
+  // This operation is also vectorized using AVX.
+  for (int i = 0; i < x_h; i++) {
+    double* output_row_ptr = &dot_add_output[i * W_w];
+    int j = 0;
+    // Vectorized part of the j loop for bias addition
+    for (; j + 3 < W_w; j += 4) {
+      // Load 4 doubles from the current output row
+      __m256d output_vec = _mm256_loadu_pd(output_row_ptr + j);
+      // Load 4 doubles from the bias vector 'b'
+      __m256d b_vec = _mm256_loadu_pd(&dot_add_input_b[j]); 
+
+      // Add the bias vector to the output vector
+      __m256d sum_vec = _mm256_add_pd(output_vec, b_vec);
+      
+      // Store the result back
+      _mm256_storeu_pd(output_row_ptr + j, sum_vec);
+    }
+    // Handle remaining elements (tail loop) for bias addition
+    for (; j < W_w; j++) {
+      output_row_ptr[j] += dot_add_input_b[j];
+    }
+  }
+}

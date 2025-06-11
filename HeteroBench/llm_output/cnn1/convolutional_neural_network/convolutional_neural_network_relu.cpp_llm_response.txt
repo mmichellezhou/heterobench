@@ -1,0 +1,68 @@
+```cpp
+/*
+ * (C) Copyright [2024] Hewlett Packard Enterprise Development LP
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the Software),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included
+ * in all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+ 
+#include "cpu_impl.h"
+#include <iostream>
+#include <math.h>
+#include <immintrin.h> // Required for AVX intrinsics
+
+using namespace std;
+
+/* This is the Cpp implementation of the following Python code */
+/* Here the input and output are 2D arraies */
+/*
+def relu(x):
+  return np.maximum(0, x)
+*/
+
+void relu(double *relu_input, double *relu_output, int size) {
+  // Vector width for double using AVX (256-bit registers) is 4 doubles.
+  const int VEC_SIZE = 4;
+
+  // Initialize a vector with all elements set to 0.0
+  // This will be used for the max(0.0, x) operation.
+  __m256d zero_vec = _mm256_setzero_pd();
+
+  int i = 0;
+
+  // Process elements in chunks of VEC_SIZE using AVX intrinsics.
+  // _mm256_loadu_pd and _mm256_storeu_pd are used for unaligned memory access,
+  // which is generally safe and performs well even if data is aligned.
+  for (; i + VEC_SIZE <= size; i += VEC_SIZE) {
+    // Load 4 double values from relu_input starting at index i
+    __m256d input_vec = _mm256_loadu_pd(&relu_input[i]);
+
+    // Compute the element-wise maximum between zero_vec (0.0) and input_vec
+    __m256d output_vec = _mm256_max_pd(zero_vec, input_vec);
+
+    // Store the resulting 4 double values to relu_output starting at index i
+    _mm256_storeu_pd(&relu_output[i], output_vec);
+  }
+
+  // Handle any remaining elements that couldn't be processed by the vectorized loop.
+  // This loop will execute if 'size' is not a perfect multiple of VEC_SIZE.
+  for (; i < size; i++) {
+    relu_output[i] = max(0.0, relu_input[i]);
+  }
+}
+```
