@@ -245,12 +245,12 @@ void SgdLR_sw( DataType    data[NUM_FEATURES * NUM_TRAINING],
   }
   std::cout << "Done" << std::endl;
 
-/*
+
   // check results
   std::cout << "Checking results ...";
   check_results( theta, data, label );
   std::cout << "Done" << std::endl;
-*/
+
 
   // multi iterations
   int iterations = ITERATIONS;

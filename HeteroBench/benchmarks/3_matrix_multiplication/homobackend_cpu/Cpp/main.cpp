@@ -144,7 +144,7 @@ int main(int argc,char **argv)
 
   double (*G_golden)[NI + 0][NL + 0];
   G_golden = ((double (*)[NI + 0][NL + 0])(polybench_alloc_data(((NI + 0) * (NL + 0)),(sizeof(double )))));
-/*
+
   // check result
   std::cout << "Checking results ..." << std::endl;
   golden_kernel_3mm(*E, *A, *B, *F, *C, *D, *G_golden);
@@ -161,11 +161,11 @@ int main(int argc,char **argv)
   if (error) {
     cout << "Error count: " << error << endl;
   } else {
-    // cout << "No errors detected" << endl;
+    cout << "No errors detected" << endl;
   }
 
   std::cout << "Done" << std::endl;
-*/
+
 
   // multi iterations
   int iterations = ITERATIONS;

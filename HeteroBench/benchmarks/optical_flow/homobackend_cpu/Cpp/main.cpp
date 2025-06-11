@@ -137,10 +137,10 @@ void optical_flow_sw(pixel_t frame0[MAX_HEIGHT][MAX_WIDTH],
   flow_calc(tensor, outputs);
   std::cout << "Done" << std::endl;
 
-/*
+
   // check results
   write_results(outputs, refFlow, outFile);
-*/
+
 
   // multi iterations
   int iterations = ITERATIONS;

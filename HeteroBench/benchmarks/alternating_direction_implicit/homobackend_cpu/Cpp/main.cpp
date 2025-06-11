@@ -142,7 +142,7 @@ int main(int argc,char **argv)
   double (*B_golden)[N + 0][N + 0];
   B_golden = ((double (*)[N + 0][N + 0])(polybench_alloc_data(((N + 0) * (N + 0)),(sizeof(double )))));
 
-/*
+
   // check result
   std::cout << "Checking results ..." << std::endl;
   golden_init_array(n, *X_golden, *A_golden, *B_golden);
@@ -174,7 +174,7 @@ int main(int argc,char **argv)
     cout << "Total " << error << " errors!" << endl;
   }
   std::cout << "Done" << std::endl;
-*/
+
 
   // multi iterations
   int iterations = ITERATIONS;

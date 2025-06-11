@@ -145,7 +145,7 @@ void cnn_forward(string input_path, string output_path)
   double *flattened_output_golden = new double [FLATTENED_OUTPUT_SIZE];
   double *fc_output_golden = new double [FULL_CONNECT_LAYER_SIZE_W];
   double *softmax_output_golden = new double [FULL_CONNECT_LAYER_SIZE_W];
-/*
+
   // readData("../../dataset/conv_output.bin", conv_output_golden, CONV_OUTPUT_HEIGHT * CONV_OUTPUT_WIDTH);
   // readData("../../dataset/relu_output.bin", relu_output_golden, CONV_OUTPUT_HEIGHT * CONV_OUTPUT_WIDTH);
   // readData("../../dataset/pooled_output.bin", pool_output_golden, POOLING_OUTPUT_HEIGHT * POOLING_OUTPUT_WIDTH);
@@ -171,7 +171,7 @@ void cnn_forward(string input_path, string output_path)
   checkResult(fc_output, fc_output_golden, FULL_CONNECT_LAYER_SIZE_W);
   std::cout << "checking softmax_output ... ";
   checkResult(softmax_output, softmax_output_golden, FULL_CONNECT_LAYER_SIZE_W);
-*/
+
 
   // multi iterations
   int iterations = ITERATIONS;

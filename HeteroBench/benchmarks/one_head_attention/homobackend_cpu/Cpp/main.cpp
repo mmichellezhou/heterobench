@@ -129,7 +129,7 @@ void one_head_attention(string input_path, string output_path)
   double *matmul_query_key_golden = new double [BATCH_SIZE * N * N];
   double *softmax_result_golden = new double [BATCH_SIZE * N * N];
   double *matmul_softmax_value_golden = new double [BATCH_SIZE * N * D];
-/*
+
   readData((output_path + "/transpose_key_golden.bin").c_str(), transpose_key_golden, BATCH_SIZE * D * N);
   readData((output_path + "/matmul_query_key_golden.bin").c_str(), matmul_query_key_golden, BATCH_SIZE * N * N);
   readData((output_path + "/softmax_result_golden.bin").c_str(), softmax_result_golden, BATCH_SIZE * N * N);
@@ -143,7 +143,7 @@ void one_head_attention(string input_path, string output_path)
   checkResult(softmax_result, softmax_result_golden, BATCH_SIZE * N * N);
   std::cout << "checking matmul_softmax_value ... ";
   checkResult(matmul_softmax_value, matmul_softmax_value_golden, BATCH_SIZE * N * D);
-*/
+
 
   // multi iterations
   int iterations = ITERATIONS;

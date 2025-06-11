@@ -1,10 +1,10 @@
 #include <iostream>
 
 // dataset information
-// #define NUM_TRAINING 18000
-// #define CLASS_SIZE 1800
-// #define NUM_TEST 2000
-// #define DIGIT_WIDTH 4
+#define NUM_TRAINING 18000
+#define CLASS_SIZE 1800
+#define NUM_TEST 2000
+#define DIGIT_WIDTH 4
 
 // typedefs
 typedef unsigned long long DigitType;

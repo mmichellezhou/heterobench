@@ -170,7 +170,7 @@ void mlp_forward(string input_path, string output_path)
   double *data_z3_golden = new double [SIZE_Z3];
   double *data_a4_golden = new double [SIZE_A4];
   double *data_z4_golden = new double [SIZE_Z4];
-/*
+
   // readData("../../dataset/a1.bin", data_a1_golden, SIZE_A1);
   // readData("../../dataset/z1.bin", data_z1_golden, SIZE_Z1);
   // readData("../../dataset/a2.bin", data_a2_golden, SIZE_A2);
@@ -212,7 +212,7 @@ void mlp_forward(string input_path, string output_path)
   // check z4
   std::cout << "check z4 ... ";
   checkResult(data_z4, data_z4_golden, SIZE_Z4);
-*/
+
 
   // multi iterations
   int iterations = ITERATIONS;
