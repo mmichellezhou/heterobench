@@ -1,0 +1,83 @@
+/*
+ * (C) Copyright [2024] Hewlett Packard Enterprise Development LP
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the Software),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included
+ * in all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+ 
+#include "cpu_impl.h"
+
+using namespace std;
+
+void kernel_3m_0(double A[NI + 0][NK + 0], double B[NK + 0][NJ + 0], double E[NI + 0][NJ + 0])
+{
+  int c1; // Corresponds to NI dimension
+  int c2; // Corresponds to NJ dimension
+  int c5; // Corresponds to NK dimension
+
+  // Original loop order: IJK (c1, c2, c5)
+  // E[c1][c2] += A[c1][c5] * B[c5][c2];
+  //
+  // Analysis of original loop order (assuming row-major storage for 2D arrays in C++):
+  // - A[c1][c5]: 'c1' is the outer loop index, 'c5' is the inner loop index. For a fixed 'c1',
+  //   accesses elements contiguously along a row of A. Good cache locality.
+  // - B[c5][c2]: 'c5' is the middle loop index, 'c2' is the inner loop index. For a fixed 'c5',
+  //   accesses elements contiguously along a row of B. Good cache locality.
+  // - E[c1][c2]: 'c1' is the outer loop index, 'c2' is the middle loop index. For a fixed 'c1',
+  //   accesses elements contiguously along a row of E. Good cache locality.
+
+  // The original loop order had an issue: while A and E were accessed efficiently,
+  // B was accessed column-wise effectively because 'c5' (row index) was the middle loop
+  // and 'c2' (column index) was the innermost loop. This resulted in strided memory access
+  // for B, leading to poor cache performance.
+
+  // Optimized loop order: IKJ (c1, c5, c2)
+  // This order is generally preferred for matrix multiplication (C = A * B)
+  // when matrices are stored in row-major order, as it ensures contiguous memory
+  // access for all three matrices (A, B, E), maximizing cache utilization.
+  //
+  // - A[c1][c5]: 'c1' is the outer loop, 'c5' is the middle loop. Accesses elements
+  //   contiguously along a row of A. Excellent cache locality.
+  // - B[c5][c2]: 'c5' is the middle loop, 'c2' is the inner loop. Accesses elements
+  //   contiguously along a row of B. Excellent cache locality.
+  // - E[c1][c2]: 'c1' is the outer loop, 'c2' is the inner loop. Accesses elements
+  //   contiguously along a row of E. Excellent cache locality.
+  //
+  // The innermost loop (c2) now processes contiguous elements of B and E,
+  // making it highly amenable to SIMD (Single Instruction, Multiple Data)
+  // vectorization by modern compilers (e.g., with -O3 -mavx flags).
+  // This allows the CPU to process multiple `double` elements simultaneously.
+
+  for (c1 = 0; c1 < NI; c1++) {
+    for (c5 = 0; c5 < NK; c5++) {
+      // Scalar promotion: Load A[c1][c5] once outside the innermost loop.
+      // This value is constant for the entire inner 'c2' loop. This reduces
+      // redundant memory loads and allows the compiler to efficiently broadcast
+      // this scalar value for SIMD multiplications.
+      double val_A_c1_c5 = A[c1][c5];
+
+      // Innermost loop: c2
+      // This loop is now perfectly structured for auto-vectorization.
+      // E[c1][c2] and B[c5][c2] are accessed contiguously, and val_A_c1_c5
+      // can be broadcasted.
+      for (c2 = 0; c2 < NJ; c2++) {
+        E[c1][c2] += val_A_c1_c5 * B[c5][c2];
+      }
+    }
+  }
+}

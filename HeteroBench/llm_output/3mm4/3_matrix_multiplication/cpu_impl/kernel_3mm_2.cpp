@@ -1,0 +1,88 @@
+/*
+ * (C) Copyright [2024] Hewlett Packard Enterprise Development LP
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the Software),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included
+ * in all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+ 
+#include "cpu_impl.h"
+#include <immintrin.h> // For AVX intrinsics (e.g., _mm256_*)
+
+using namespace std;
+
+void kernel_3m_2(double E[NI + 0][NJ + 0], double F[NJ + 0][NL + 0], double G[NI + 0][NL + 0])
+{
+  int c1;
+  int c2;
+  int c6;
+
+  // The original loop order is (c1, c2, c6), corresponding to (i, j, k) for G[i][k] += E[i][j] * F[j][k].
+  // This loop order is highly beneficial for SIMD vectorization of the innermost loop (c6) because:
+  // 1. E[c1][c2] is a scalar value that is constant (loop-invariant) within the c6 loop.
+  //    This allows it to be broadcast into a SIMD register once per c2 iteration.
+  // 2. F[c2][c6] is accessed with c6 as the innermost index. For a fixed c2, accessing F[c2][c6]
+  //    as c6 increments provides contiguous memory access (row-major), which is ideal for SIMD loads.
+  // 3. G[c1][c6] is also accessed with c6 as the innermost index. For a fixed c1, accessing G[c1][c6]
+  //    as c6 increments provides contiguous memory access (row-major), ideal for SIMD loads and stores.
+  // This setup minimizes cache misses for F and G in the inner loop and allows for efficient
+  // vectorized multiply-add operations. While G[c1][c6] is read/modified/written NJ times,
+  // for typical matrix sizes (e.g., NI=NJ=NL=1024), a row of G (8KB) often fits entirely in L1 cache,
+  // mitigating the cost of repeated access.
+
+  // For double precision (8 bytes per double), AVX (256-bit) instructions operate on 4 doubles.
+  // SSE (128-bit) operates on 2 doubles. We target AVX for maximum performance.
+  const int VEC_SIZE = 4; // Number of doubles per __m256d vector
+
+  for (c1 = 0; c1 <= NI - 1; c1++) {
+    for (c2 = 0; c2 <= NJ - 1; c2++) {
+      // Load the scalar E[c1][c2] into all elements of an AVX vector.
+      // This value is constant for the innermost c6 loop.
+      __m256d E_scalar_vec = _mm256_set1_pd(E[c1][c2]);
+
+      // Calculate the upper bound for the vectorized loop.
+      // This ensures we only process full vectors of VEC_SIZE elements.
+      int c6_vec_end = NL - (NL % VEC_SIZE);
+
+      // Vectorized loop for c6
+      for (c6 = 0; c6 < c6_vec_end; c6 += VEC_SIZE) {
+        // Load 4 doubles from F[c2][c6] starting at the current c6.
+        // _mm256_loadu_pd is used for unaligned memory access. This is safer
+        // as the arrays passed to the function might not be 32-byte aligned.
+        __m256d F_vec = _mm256_loadu_pd(&F[c2][c6]);
+
+        // Load 4 doubles from G[c1][c6] starting at the current c6.
+        __m256d G_vec = _mm256_loadu_pd(&G[c1][c6]);
+
+        // Perform element-wise multiplication: E_scalar_vec * F_vec
+        __m256d prod_vec = _mm256_mul_pd(E_scalar_vec, F_vec);
+
+        // Perform element-wise addition: G_vec + prod_vec
+        __m256d res_vec = _mm256_add_pd(G_vec, prod_vec);
+
+        // Store the result back to G[c1][c6]
+        _mm256_storeu_pd(&G[c1][c6], res_vec);
+      }
+
+      // Handle remaining elements (if NL is not a multiple of VEC_SIZE).
+      // This loop processes the last few elements that don't form a full vector.
+      for (; c6 <= NL - 1; c6++) {
+        G[c1][c6] += E[c1][c2] * F[c2][c6];
+      }
+    }
+  }
+}

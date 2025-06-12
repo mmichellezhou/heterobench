@@ -1,0 +1,87 @@
+```cpp
+/*
+ * (C) Copyright [2024] Hewlett Packard Enterprise Development LP
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the Software),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included
+ * in all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+ 
+#include "cpu_impl.h"
+#include <immintrin.h> // Required for AVX2 intrinsics (e.g., _mm256_loadu_pd, _mm256_mul_pd, _mm256_add_pd, _mm256_storeu_pd)
+
+// Define the vector size for double-precision floating-point numbers.
+// AVX2 256-bit registers can hold 4 doubles (256 bits / 8 bytes/double = 32 bytes / 8 bytes/double = 4 doubles).
+#define VEC_SIZE 4
+
+// The original code uses `using namespace std;`. Keeping it for consistency.
+using namespace std;
+
+void kernel_3m_1(double C[NJ + 0][NM + 0], double D[NM + 0][NL + 0], double F[NJ + 0][NL + 0])
+{
+  // Original loop order: (c1, c2, c5) which corresponds to (i, j, k) in F[i][j] += C[i][k] * D[k][j].
+  // This order results in strided memory access for D[c5][c2] in the innermost loop,
+  // potentially leading to poor cache performance.
+
+  // Optimized loop order: (c1, c5, c2) which corresponds to (i, k, j).
+  // This order significantly improves cache locality for all three matrices:
+  // - C[c1][c5]: Accessed row-wise in the `c5` loop.
+  // - D[c5][c2]: Accessed row-wise in the innermost `c2` loop.
+  // - F[c1][c2]: Accessed row-wise in the innermost `c2` loop.
+  // This ensures contiguous memory access patterns, which are highly cache-friendly.
+
+  for (int c1 = 0; c1 < NJ; c1++) { // Outer loop (i)
+    for (int c5 = 0; c5 < NM; c5++) { // Middle loop (k)
+      // Hoist C[c1][c5] out of the innermost loop. Its value is constant for a given (c1, c5) pair.
+      double C_val = C[c1][c5];
+      // Broadcast C_val to all elements of an AVX2 vector register. This prepares it for
+      // vectorized multiplication with D_vec.
+      __m256d C_vec = _mm256_set1_pd(C_val);
+
+      // Innermost loop (j) is vectorized using AVX2 intrinsics.
+      // We process elements in chunks of VEC_SIZE (4 doubles) to leverage SIMD parallelism.
+      for (int c2 = 0; c2 < NL; c2 += VEC_SIZE) {
+        // Check if a full vector chunk can be processed without going out of bounds.
+        if (c2 + VEC_SIZE <= NL) {
+          // Load 4 doubles from D[c5][c2].
+          // _mm256_loadu_pd is used for unaligned memory access. This is generally safer
+          // as array rows might not always be 32-byte aligned, avoiding potential crashes
+          // or performance penalties from alignment faults. If alignment is guaranteed,
+          // _mm256_load_pd can be used for slightly better performance.
+          __m256d D_vec = _mm256_loadu_pd(&D[c5][c2]);
+          
+          // Load 4 doubles from F[c1][c2] (the current accumulated values).
+          __m256d F_vec = _mm256_loadu_pd(&F[c1][c2]);
+
+          // Perform the vectorized multiply-add operation: F_vec = F_vec + (C_vec * D_vec).
+          // This computes 4 `double` products and 4 `double` sums simultaneously.
+          F_vec = _mm256_add_pd(F_vec, _mm256_mul_pd(C_vec, D_vec));
+
+          // Store the resulting 4 doubles back to F[c1][c2].
+          _mm256_storeu_pd(&F[c1][c2], F_vec);
+        } else {
+          // Handle the remaining elements (the "tail") if NL is not a multiple of VEC_SIZE.
+          // This part is executed using scalar operations for the few remaining elements.
+          for (int c2_scalar = c2; c2_scalar < NL; c2_scalar++) {
+            F[c1][c2_scalar] += C_val * D[c5][c2_scalar];
+          }
+        }
+      }
+    }
+  }
+}
+```

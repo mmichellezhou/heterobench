@@ -1,0 +1,116 @@
+/*
+ * (C) Copyright [2024] Hewlett Packard Enterprise Development LP
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the Software),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included
+ * in all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+ 
+#include "cpu_impl.h"
+#include <iostream>
+#include <math.h>
+#include <immintrin.h> // Required for AVX intrinsics
+
+using namespace std;
+
+/* This is the Cpp implementation of the following Python code */
+/* Here the input and output are 2D arraies */
+/*
+  def dot_add(x, W, b):
+    mm = np.dot(x, W) + b
+    return mm
+*/
+
+void dot_add(double *dot_add_input_x, double *dot_add_input_W, double *dot_add_input_b, double *dot_add_output, int x_h, int x_w, int W_h, int W_w) {
+  // Pre-condition: For valid matrix multiplication (x * W), the number of columns in x (x_w)
+  // must be equal to the number of rows in W (W_h). The original code implicitly relies on this,
+  // as the inner loop for 'k' iterates up to 'x_w' and accesses 'dot_add_input_W[k * W_w + j]'.
+
+  // Determine the vectorization limit for the innermost 'j' loop.
+  // AVX (Advanced Vector Extensions) operates on 4 doubles (256 bits / 64 bits per double = 4).
+  const int VEC_SIZE = 4;
+  int W_w_vec_limit = W_w - (W_w % VEC_SIZE); // Calculate the largest multiple of VEC_SIZE less than W_w
+
+  // Phase 1: Initialize dot_add_output to zeros.
+  // This is necessary because we will accumulate into it in the matrix multiplication phase.
+  // Vectorize the initialization for better performance.
+  for (int i = 0; i < x_h; i++) {
+    for (int j = 0; j < W_w_vec_limit; j += VEC_SIZE) {
+      // Use _mm256_storeu_pd for unaligned stores, as memory might not be 32-byte aligned.
+      _mm256_storeu_pd(&dot_add_output[i * W_w + j], _mm256_setzero_pd());
+    }
+    // Handle any remaining elements that don't fit into a full vector (scalar fallback).
+    for (int j = W_w_vec_limit; j < W_w; j++) {
+      dot_add_output[i * W_w + j] = 0.0;
+    }
+  }
+
+  // Phase 2: Perform matrix multiplication (x * W).
+  // The loop order has been changed from (i, j, k) to (i, k, j).
+  // This reordering improves cache locality for 'dot_add_input_W' and enables
+  // efficient SIMD vectorization of the innermost 'j' loop.
+  // In this (i, k, j) order, 'dot_add_input_W[k * W_w + j]' accesses become contiguous
+  // for the innermost 'j' loop, which is ideal for SIMD loads.
+  for (int i = 0; i < x_h; i++) {
+    for (int k = 0; k < x_w; k++) { // 'x_w' corresponds to the inner dimension (W_h)
+      // Load 'x_val' once per (i, k) pair and broadcast it for vector multiplication.
+      double x_val = dot_add_input_x[i * x_w + k];
+      __m256d x_vec = _mm256_set1_pd(x_val); // Broadcast 'x_val' to all elements of the vector
+
+      // Vectorize the innermost 'j' loop.
+      for (int j = 0; j < W_w_vec_limit; j += VEC_SIZE) {
+        // Load current output vector (accumulator).
+        __m256d output_vec = _mm256_loadu_pd(&dot_add_output[i * W_w + j]);
+        // Load W vector. This access is now contiguous for the 'j' loop.
+        __m256d W_vec = _mm256_loadu_pd(&dot_add_input_W[k * W_w + j]);
+
+        // Perform fused multiply-add: output_vec = output_vec + (x_vec * W_vec)
+        output_vec = _mm256_add_pd(output_vec, _mm256_mul_pd(x_vec, W_vec));
+
+        // Store the updated output vector.
+        _mm256_storeu_pd(&dot_add_output[i * W_w + j], output_vec);
+      }
+      // Handle any remaining elements for the 'j' loop (scalar fallback).
+      for (int j = W_w_vec_limit; j < W_w; j++) {
+        dot_add_output[i * W_w + j] += x_val * dot_add_input_W[k * W_w + j];
+      }
+    }
+  }
+
+  // Phase 3: Add bias (b) to the result.
+  // This is done in a separate pass, similar to the original structure,
+  // but now also vectorized for efficiency.
+  // The bias 'b' is a 1D array, applied column-wise to the output matrix.
+  for (int i = 0; i < x_h; i++) {
+    for (int j = 0; j < W_w_vec_limit; j += VEC_SIZE) {
+      // Load current output vector.
+      __m256d output_vec = _mm256_loadu_pd(&dot_add_output[i * W_w + j]);
+      // Load bias vector. 'dot_add_input_b' is a 1D array, so its access is contiguous.
+      __m256d b_vec = _mm256_loadu_pd(&dot_add_input_b[j]);
+
+      // Perform addition: output_vec = output_vec + b_vec
+      output_vec = _mm256_add_pd(output_vec, b_vec);
+
+      // Store the final output vector.
+      _mm256_storeu_pd(&dot_add_output[i * W_w + j], output_vec);
+    }
+    // Handle any remaining elements for the 'j' loop (scalar fallback).
+    for (int j = W_w_vec_limit; j < W_w; j++) {
+      dot_add_output[i * W_w + j] += dot_add_input_b[j];
+    }
+  }
+}

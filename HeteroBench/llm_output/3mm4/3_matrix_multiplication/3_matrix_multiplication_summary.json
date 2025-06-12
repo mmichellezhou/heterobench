@@ -1,0 +1,35 @@
+{
+  "kernel_name": "3_matrix_multiplication",
+  "original_files": {
+    "main": "benchmarks/3_matrix_multiplication/homobackend_cpu/Cpp/main.cpp",
+    "kernels": [
+      "benchmarks/3_matrix_multiplication/homobackend_cpu/Cpp/cpu_impl/kernel_3mm_0.cpp",
+      "benchmarks/3_matrix_multiplication/homobackend_cpu/Cpp/cpu_impl/kernel_3mm_1.cpp",
+      "benchmarks/3_matrix_multiplication/homobackend_cpu/Cpp/cpu_impl/kernel_3mm_2.cpp"
+    ],
+    "headers": [
+      "benchmarks/3_matrix_multiplication/homobackend_cpu/Cpp/cpu_impl/include/cpu_impl.h"
+    ]
+  },
+  "status": {
+    "kernel_generation_success": true,
+    "compilation_success": true,
+    "execution_success": true
+  },
+  "statistics": {
+    "num_files_optimized": 3,
+    "files_optimized": [
+      "kernel_3mm_0.cpp",
+      "kernel_3mm_1.cpp",
+      "kernel_3mm_2.cpp"
+    ],
+    "optimization_success": true
+  },
+  "compilation_details": {
+    "compile_output_length": 0,
+    "compile_error_length": 0,
+    "run_output_length": 386,
+    "run_error_length": 0
+  },
+  "speedup": 15.547978757637434
+}

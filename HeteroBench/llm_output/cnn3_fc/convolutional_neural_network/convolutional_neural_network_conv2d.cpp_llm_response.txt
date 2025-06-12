@@ -1,0 +1,123 @@
+```cpp
+/*
+ * (C) Copyright [2024] Hewlett Packard Enterprise Development LP
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the Software),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included
+ * in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+#include "cpu_impl.h"
+#include <iostream>
+#include <math.h>
+#include <immintrin.h> // Required for AVX intrinsics
+
+using namespace std;
+
+/* This is the Cpp implementation of the following Python code */
+/* Here the input and output are 2D arraies */
+/*
+def conv2d(input, kernel, bias, stride, padding):
+  input_padded = pad_input(input, padding)
+  kernel_height, kernel_width = kernel.shape
+  output_height = (input_padded.shape[0] - kernel_height) // stride + 1
+  output_width = (input_padded.shape[1] - kernel_width) // stride + 1
+  conv2d_output = np.zeros((output_height, output_width))
+  for i in range(0, output_height):
+    for j in range(0, output_width):
+      region = input_padded[i*stride:i*stride+kernel_height, j*stride:j*stride+kernel_width]
+      conv2d_output[i, j] = np.sum(region * kernel) + bias
+  return conv2d_output
+*/
+
+void conv2d(double *conv2d_input, double *conv2d_kernel, double *input_padded, double conv2d_bias, int stride, int padding, int input_h, int input_w, int kernel_h, int kernel_w, double *conv2d_output)
+{
+  // Call the padding function as per original logic.
+  // Its implementation is assumed to be correct and efficient.
+  pad_input(conv2d_input, input_padded, input_h, input_w, padding);
+
+  // Pre-calculate padded input width, as it's used repeatedly for indexing.
+  // This is a form of strength reduction.
+  const int padded_input_w = input_w + 2 * padding;
+
+  // Calculate output dimensions. These are constants for the main loops.
+  const int output_h = (input_h + 2 * padding - kernel_h) / stride + 1;
+  const int output_w = (input_w + 2 * padding - kernel_w) / stride + 1;
+
+  // Outer loops iterate over the output feature map dimensions
+  for (int i = 0; i < output_h; i++) {
+    // Pre-calculate the starting row index in the padded input for the current output row.
+    // This avoids repeated multiplication inside the inner loops.
+    const int input_row_start_idx = i * stride;
+
+    for (int j = 0; j < output_w; j++) {
+      // Pre-calculate the starting column index in the padded input for the current output column.
+      // This avoids repeated multiplication inside the inner loops.
+      const int input_col_start_idx = j * stride;
+
+      // Calculate the base pointer to the top-left corner of the current region
+      // in `input_padded` that corresponds to the current output pixel.
+      // This significantly reduces address calculations within the innermost loops.
+      double* current_input_region_base = input_padded + input_row_start_idx * padded_input_w + input_col_start_idx;
+
+      double tmp = 0.0; // Accumulator for the current output pixel's sum of products
+
+      // Loops over the kernel dimensions (k for height, l for width)
+      for (int k = 0; k < kernel_h; k++) {
+        // Pointers to the current row of the input region and kernel.
+        // These are updated per kernel row, reducing calculations in the innermost loop.
+        double* current_input_row_ptr = current_input_region_base + k * padded_input_w;
+        double* current_kernel_row_ptr = conv2d_kernel + k * kernel_w;
+
+        // Initialize an AVX register for accumulating sums for the current kernel row.
+        // This allows for parallel accumulation of 4 doubles at a time.
+        __m256d row_sum_vec = _mm256_setzero_pd();
+
+        int l = 0;
+        // Vectorized loop for kernel_w: processes 4 doubles at a time using AVX intrinsics.
+        // `_mm256_loadu_pd` performs unaligned loads, which are safe for arbitrary memory addresses.
+        for (; l + 4 <= kernel_w; l += 4) {
+          // Load 4 doubles from the current input row and kernel row.
+          __m256d input_vec = _mm256_loadu_pd(current_input_row_ptr + l);
+          __m256d kernel_vec = _mm256_loadu_pd(current_kernel_row_ptr + l);
+
+          // Perform element-wise multiplication and add the results to the sum vector.
+          // This leverages Fused Multiply-Add (FMA) instructions if supported by the CPU.
+          row_sum_vec = _mm256_add_pd(row_sum_vec, _mm256_mul_pd(input_vec, kernel_vec));
+        }
+
+        // Scalar remainder loop for kernel_w: handles any remaining elements
+        // if `kernel_w` is not a multiple of 4.
+        for (; l < kernel_w; ++l) {
+          tmp += current_input_row_ptr[l] * current_kernel_row_ptr[l];
+        }
+
+        // Horizontal sum of the AVX register `row_sum_vec`.
+        // This sums the 4 double-precision floating-point numbers in `row_sum_vec`
+        // into a single scalar value, which is then added to `tmp`.
+        __m128d sum_high = _mm256_extractf128_pd(row_sum_vec, 1); // Extract upper 128 bits (elements 2, 3)
+        __m128d sum_low = _mm256_castpd256_pd128(row_sum_vec);    // Extract lower 128 bits (elements 0, 1)
+        __m128d sum_128 = _mm_add_pd(sum_high, sum_low);          // Add corresponding elements: [s0+s2, s1+s3]
+        __m128d sum_final = _mm_hadd_pd(sum_128, sum_128);        // Horizontal add: [ (s0+s2)+(s1+s3), (s0+s2)+(s1+s3) ]
+        tmp += _mm_cvtsd_f64(sum_final);                          // Extract the first double, which now holds the total sum
+      }
+      // Add the bias to the accumulated sum and store the result in the output array.
+      conv2d_output[i * output_w + j] = tmp + conv2d_bias;
+    }
+  }
+}
+```

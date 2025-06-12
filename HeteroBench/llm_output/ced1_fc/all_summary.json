@@ -1,0 +1,7 @@
+{
+  "canny_edge_detection": {
+    "kernel_generation_success": true,
+    "compilation_success": false,
+    "execution_success": false
+  }
+}

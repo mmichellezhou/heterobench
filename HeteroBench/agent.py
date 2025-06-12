@@ -175,10 +175,14 @@ class HeteroBenchAgent:
         Returns:
             Formatted prompt string
         """
-        prompt = f"""You are an expert in high-performance computing and kernel optimization. Your task is to optimize the kernel implementation in the cpu_impl directory while maintaining functional equivalence. Focus on single-threaded performance improvements.
+        prompt = f"""You are an expert in high-performance computing and kernel optimization. Your task is to optimize the kernel implementation while maintaining functional equivalence. Focus on single-threaded performance improvements.
+
+IMPORTANT: This is a C++ implementation. You MUST use C++ syntax and features:
+- Use __restrict__ (with double underscores) for pointer aliasing, NOT restrict
+- Do not use C-style syntax or features
+- All code must be valid C++
 
 The original test harness (main.cpp) will be used to verify correctness and measure performance.
-Only optimize the kernel implementation in cpu_impl.
 
 Given implementation to optimize:
 
@@ -207,6 +211,7 @@ Important Implementation Details:
 5. Only optimize the kernel implementation in cpu_impl
 6. If you use any new variables (e.g., for tiling, unrolling, etc.), you MUST define them in the header file
 7. Do not use any variables that aren't defined in the header file
+8. CRITICAL: Always use __restrict__ (with double underscores) for pointer aliasing, never use restrict
 
 Consider applying these optimizations:
 - Vectorization (SIMD instructions)

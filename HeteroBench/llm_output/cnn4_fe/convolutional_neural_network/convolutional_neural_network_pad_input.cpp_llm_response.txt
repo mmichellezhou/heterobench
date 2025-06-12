@@ -1,0 +1,94 @@
+```cpp
+/*
+ * (C) Copyright [2024] Hewlett Packard Enterprise Development LP
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the Software),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included
+ * in all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+ 
+#include "cpu_impl.h"
+// Original includes:
+// #include <iostream> // Not used in this function, removed for cleaner code.
+// #include <math.h>   // Not used in this function, removed for cleaner code.
+#include <cstddef>  // Required for size_t, which is used for robust indexing.
+
+// Original: using namespace std;
+// Kept for exact drop-in replacement as it was present in the original snippet.
+using namespace std; 
+
+void pad_input(double *pad_input_input, double *pad_input_output, int input_h, int input_w, int padding) {
+  // Use const size_t for dimensions and loop counters. This is a best practice for array indexing
+  // to prevent potential integer overflow with very large dimensions and to signal to the compiler
+  // that these are sizes, which can sometimes aid in optimization.
+  const size_t h = static_cast<size_t>(input_h);
+  const size_t w = static_cast<size_t>(input_w);
+  const size_t p = static_cast<size_t>(padding);
+
+  if (p == 0) {
+    // Case 1: padding is 0. This is a direct memory copy from input to output.
+    // The loops are structured in a row-major fashion, which is cache-friendly.
+    // Modern compilers (with optimization flags like -O3) are highly optimized
+    // to auto-vectorize such simple, contiguous memory copy loops using SIMD instructions.
+    for (size_t i = 0; i < h; ++i) {
+      // Pre-calculate the starting index for the current row. This is a form of
+      // strength reduction, replacing a multiplication inside the inner loop with
+      // an addition in the outer loop, making the inner loop's address calculation
+      // simpler and more amenable to vectorization.
+      const size_t current_row_base_idx = i * w;
+      for (size_t j = 0; j < w; ++j) {
+        pad_input_output[current_row_base_idx + j] = pad_input_input[current_row_base_idx + j];
+      }
+    }
+    return;
+  }
+
+  // Case 2: padding > 0.
+  // Calculate the dimensions of the padded output array once.
+  const size_t padded_h = h + 2 * p;
+  const size_t padded_w = w + 2 * p;
+
+  // Step 1: Initialize the entire output array to 0.0.
+  // This is a large memory fill operation.
+  // The loop iterates row by row, accessing memory contiguously. This pattern is
+  // highly efficient for cache utilization and is a prime candidate for
+  // auto-vectorization (e.g., using AVX/AVX2/AVX512 instructions for `double` types).
+  for (size_t i = 0; i < padded_h; ++i) {
+    const size_t current_row_base_idx = i * padded_w;
+    for (size_t j = 0; j < padded_w; ++j) {
+      pad_input_output[current_row_base_idx + j] = 0.0;
+    }
+  }
+
+  // Step 2: Copy the input data to the central padded region.
+  // Both input and output arrays are accessed with linear patterns within the inner loop,
+  // which is ideal for auto-vectorization.
+  // The outer loop calculates the starting row index for the input and the corresponding
+  // row in the padded output. The inner loop then copies elements with an additional
+  // column offset for the output.
+  for (size_t i = 0; i < h; ++i) {
+    const size_t input_row_base_idx = i * w;
+    // Calculate the starting index for the current row in the padded output.
+    // This accounts for the 'padding' rows above the actual input data.
+    const size_t output_row_base_idx = (i + p) * padded_w;
+    for (size_t j = 0; j < w; ++j) {
+      // The 'j + p' offset accounts for the 'padding' columns to the left of the input data.
+      pad_input_output[output_row_base_idx + j + p] = pad_input_input[input_row_base_idx + j];
+    }
+  }
+}
+```

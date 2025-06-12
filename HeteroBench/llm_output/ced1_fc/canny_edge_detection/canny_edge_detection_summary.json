@@ -1,0 +1,34 @@
+{
+  "kernel_name": "canny_edge_detection",
+  "original_files": {
+    "main": "benchmarks/canny_edge_detection/homobackend_cpu/Cpp/main.cpp",
+    "kernels": [
+      "benchmarks/canny_edge_detection/homobackend_cpu/Cpp/cpu_impl/kernel_canny.cpp"
+    ],
+    "headers": [
+      "benchmarks/canny_edge_detection/homobackend_cpu/Cpp/cpu_impl/include/cpu_impl.h"
+    ]
+  },
+  "status": {
+    "kernel_generation_success": true,
+    "compilation_success": false,
+    "execution_success": false
+  },
+  "statistics": {
+    "num_files_optimized": 5,
+    "files_optimized": [
+      "double_thresholding.cpp",
+      "gradient_intensity_direction.cpp",
+      "edge_thinning.cpp",
+      "gaussian_filter.cpp",
+      "hysteresis.cpp"
+    ],
+    "optimization_success": true
+  },
+  "compilation_details": {
+    "compile_output_length": 0,
+    "compile_error_length": 1707,
+    "run_output_length": 0,
+    "run_error_length": 0
+  }
+}

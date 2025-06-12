@@ -1,0 +1,107 @@
+/*
+ * (C) Copyright [2024] Hewlett Packard Enterprise Development LP
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the Software),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included
+ * in all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+ 
+#include "cpu_impl.h"
+#include <iostream>
+#include <math.h>
+#include <immintrin.h> // Required for AVX intrinsics
+
+void dot_add(double *dot_add_input_x, double *dot_add_input_W, double *dot_add_input_b, double *dot_add_output, int x_h, int x_w, int W_h, int W_w) {
+  // Optimized implementation for single-threaded performance.
+  // Key optimizations applied:
+  // 1. Loop Reordering (i-k-j): The original implementation used an i-j-k loop order for matrix multiplication.
+  //    This resulted in strided (column-wise) access to `dot_add_input_W` in the innermost `k` loop,
+  //    which is cache-unfriendly for row-major storage. By reordering to i-k-j, the innermost `j` loop
+  //    now accesses `dot_add_input_W` and `dot_add_output` contiguously (row-wise), significantly
+  //    improving cache utilization.
+  // 2. Combined Bias Addition: The bias vector `dot_add_input_b` is now added during the initialization
+  //    of the `dot_add_output` matrix. This eliminates a separate, second pass over the entire
+  //    `dot_add_output` matrix, reducing memory access overhead and improving overall efficiency.
+  // 3. Vectorization (SIMD): The innermost `j` loops (both for bias initialization and matrix multiplication)
+  //    are vectorized using AVX (Advanced Vector Extensions) intrinsics. This allows the CPU to perform
+  //    operations on multiple `double` precision floating-point numbers (4 doubles per `__m256d` register)
+  //    simultaneously, leveraging modern processor capabilities for higher throughput.
+  //    `_mm256_loadu_pd` and `_mm256_storeu_pd` are used for unaligned memory access, which is generally safe
+  //    and performant on modern architectures. Scalar remainder loops handle elements not fitting the vector width.
+  // 4. Pointer Arithmetic Optimization: Using explicit pointers (`x_row_ptr`, `output_row_ptr`, `W_k_row_ptr`)
+  //    can sometimes help compilers generate more efficient address calculations by avoiding repeated
+  //    multiplications within loops, though modern compilers are often capable of this optimization automatically.
+
+  // Part 1: Initialize dot_add_output with dot_add_input_b
+  // This loop initializes each row of dot_add_output with the bias vector.
+  // It is vectorized to load and store 4 doubles at a time using AVX.
+  for (int i = 0; i < x_h; i++) {
+    int j = 0;
+    // Vectorized loop for bias addition (AVX processes 4 doubles per __m256d)
+    for (; j + 3 < W_w; j += 4) {
+      // Load 4 double values from dot_add_input_b starting at index j
+      __m256d b_vec = _mm256_loadu_pd(&dot_add_input_b[j]);
+      // Store these 4 values into dot_add_output[i * W_w + j]
+      _mm256_storeu_pd(&dot_add_output[i * W_w + j], b_vec);
+    }
+    // Scalar remainder loop for elements not covered by vectorization
+    for (; j < W_w; j++) {
+      dot_add_output[i * W_w + j] = dot_add_input_b[j];
+    }
+  }
+
+  // Part 2: Perform matrix multiplication (x * W) and accumulate into the already biased dot_add_output.
+  // The operation is C_ij += A_ik * B_kj, where C=dot_add_output, A=dot_add_input_x, B=dot_add_input_W.
+  // Loop order: i (rows of x) -> k (inner dimension, x_w == W_h) -> j (columns of W).
+  for (int i = 0; i < x_h; i++) {
+    // Pre-calculate base pointers for the current row of x and output for efficiency.
+    const double* x_row_ptr = dot_add_input_x + i * x_w;
+    double* output_row_ptr = dot_add_output + i * W_w;
+
+    for (int k = 0; k < x_w; k++) { // Note: x_w must be equal to W_h for valid matrix multiplication.
+      // Get the scalar value from x[i][k]
+      double x_val = x_row_ptr[k];
+      // Broadcast this scalar value into an AVX register for vectorized multiplication.
+      __m256d x_vec = _mm256_set1_pd(x_val);
+
+      // Pre-calculate base pointer for the current row k of W.
+      const double* W_k_row_ptr = dot_add_input_W + k * W_w;
+
+      int j = 0;
+      // Vectorized loop for accumulating matrix multiplication results.
+      // This loop processes 4 elements of W's k-th row and output's i-th row simultaneously.
+      for (; j + 3 < W_w; j += 4) {
+        // Load 4 double values from W[k][j..j+3]
+        __m256d W_vec = _mm256_loadu_pd(&W_k_row_ptr[j]);
+        // Load 4 double values from output[i][j..j+3] (which already contains the bias)
+        __m256d out_vec = _mm256_loadu_pd(&output_row_ptr[j]);
+
+        // Perform vectorized multiplication: x_vec * W_vec
+        __m256d mul_vec = _mm256_mul_pd(x_vec, W_vec);
+        // Perform vectorized addition: out_vec + mul_vec
+        __m256d add_vec = _mm256_add_pd(out_vec, mul_vec);
+
+        // Store the result back into output[i][j..j+3]
+        _mm256_storeu_pd(&output_row_ptr[j], add_vec);
+      }
+      // Scalar remainder loop for elements not covered by vectorization
+      for (; j < W_w; j++) {
+        output_row_ptr[j] += x_val * W_k_row_ptr[j];
+      }
+    }
+  }
+}

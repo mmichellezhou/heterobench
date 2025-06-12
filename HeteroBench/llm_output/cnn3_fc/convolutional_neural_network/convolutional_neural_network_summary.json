@@ -1,0 +1,35 @@
+{
+  "kernel_name": "convolutional_neural_network",
+  "original_files": {
+    "main": "benchmarks/convolutional_neural_network/homobackend_cpu/Cpp/main.cpp",
+    "kernels": [
+      "benchmarks/convolutional_neural_network/homobackend_cpu/Cpp/cpu_impl/kernel_conv.cpp"
+    ],
+    "headers": [
+      "benchmarks/convolutional_neural_network/homobackend_cpu/Cpp/cpu_impl/include/cpu_impl.h"
+    ]
+  },
+  "status": {
+    "kernel_generation_success": true,
+    "compilation_success": false,
+    "execution_success": false
+  },
+  "statistics": {
+    "num_files_optimized": 6,
+    "files_optimized": [
+      "dot_add.cpp",
+      "conv2d.cpp",
+      "softmax.cpp",
+      "max_pooling.cpp",
+      "pad_input.cpp",
+      "relu.cpp"
+    ],
+    "optimization_success": true
+  },
+  "compilation_details": {
+    "compile_output_length": 0,
+    "compile_error_length": 9424,
+    "run_output_length": 0,
+    "run_error_length": 0
+  }
+}

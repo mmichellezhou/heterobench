@@ -10,8 +10,8 @@ DEFAULT_MODEL_CONFIGS = {
         "gpt-4o": {"temperature": 0.0, "max_tokens": 8196},
     },
     "google": {
-        "gemini-2.5-flash-preview-05-20": {"temperature": 0.5, "max_tokens": 65536},
-        "gemini-2.5-pro-preview-05-06": {"temperature": 0.5, "max_tokens": 65536},
+        "gemini-2.5-flash-preview-05-20": {"temperature": 0.0, "max_tokens": 65536},
+        "gemini-2.5-pro-preview-05-06": {"temperature": 0.0, "max_tokens": 65536},
     }
 }
 

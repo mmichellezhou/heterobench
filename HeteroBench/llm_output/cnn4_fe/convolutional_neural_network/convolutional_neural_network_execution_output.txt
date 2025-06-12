@@ -1,0 +1,11 @@
+EXECUTION COMMAND:
+
+
+STDOUT:
+=======================================
+Running cnn benchmark C++ Serial
+=======================================
+Usage: ./cnn_sw <input_path> <output_path>
+
+
+STDERR:

@@ -1,0 +1,73 @@
+/*
+ * (C) Copyright [2024] Hewlett Packard Enterprise Development LP
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the Software),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included
+ * in all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+ 
+#include "cpu_impl.h"
+#include <iostream>
+#include <math.h>
+#include <cstring>   // For memcpy
+#include <algorithm> // For std::fill
+
+using namespace std;
+
+void pad_input(double *pad_input_input, double *pad_input_output, int input_h, int input_w, int padding) {
+  if (padding == 0) {
+    // If padding is 0, the output is simply a copy of the input.
+    // Use memcpy for optimal performance as it's highly optimized for contiguous memory copies.
+    // The total size to copy is input_h * input_w elements, each of size sizeof(double).
+    memcpy(pad_input_output, pad_input_input, (size_t)input_h * input_w * sizeof(double));
+    return;
+  }
+
+  // Calculate dimensions of the padded output array.
+  // These values are constant within the function, so pre-calculating them
+  // avoids redundant additions inside loops.
+  int output_h = input_h + 2 * padding;
+  int output_w = input_w + 2 * padding;
+  
+  // Step 1: Initialize the entire output array to 0.0.
+  // std::fill is highly efficient for this purpose. Compilers often optimize it
+  // to use vectorized instructions (e.g., AVX for doubles) or specialized
+  // memory operations (like memset for byte-sized zeros, or equivalent for doubles).
+  // Using (long long) for the total size to prevent potential overflow if output_h * output_w
+  // exceeds INT_MAX before multiplication, though for typical dimensions, int might suffice.
+  fill(pad_input_output, pad_input_output + (long long)output_h * output_w, 0.0);
+
+  // Step 2: Copy the input data to the central padded region of the output array.
+  // Optimize by calculating row pointers once per outer loop iteration.
+  // This reduces multiplications inside the inner loop and helps the compiler
+  // generate more efficient code, potentially enabling auto-vectorization.
+  for (int i = 0; i < input_h; i++) {
+    // Calculate the starting address for the current input row.
+    const double* current_input_row_ptr = pad_input_input + (long long)i * input_w;
+    
+    // Calculate the starting address for the current output row, considering the vertical padding.
+    double* current_output_row_ptr = pad_input_output + (long long)(i + padding) * output_w;
+
+    // Copy elements for the current row.
+    // The original inner loop was a simple element-by-element copy.
+    // Replacing it with memcpy for the entire row is a significant optimization
+    // as memcpy is highly optimized for bulk data movement, leveraging SIMD instructions
+    // and cache-friendly access patterns.
+    // The destination for this row copy starts at 'padding' offset within the output row.
+    memcpy(current_output_row_ptr + padding, current_input_row_ptr, (size_t)input_w * sizeof(double));
+  }
+}

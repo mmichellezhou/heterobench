@@ -1,0 +1,22 @@
+COMPILATION COMMAND:
+
+
+STDOUT:
+
+
+STDERR:
+llm_output/20250611_171515_gemini-2.5-flash-preview-05-20/canny_edge_detection/cpu_impl/double_thresholding.cpp: In function ‘void double_thresholding(double*, int, int, int, int, uint8_t*)’:
+llm_output/20250611_171515_gemini-2.5-flash-preview-05-20/canny_edge_detection/cpu_impl/double_thresholding.cpp:103:51: error: cannot convert ‘__m128i’ {aka ‘__vector(2) long long int’} to ‘__m256i’ {aka ‘__vector(4) long long int’} in initialization
+  103 |             __m256i i_res_lo = _mm256_cvttpd_epi32(result_lo);
+      |                                ~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~
+      |                                                   |
+      |                                                   __m128i {aka __vector(2) long long int}
+llm_output/20250611_171515_gemini-2.5-flash-preview-05-20/canny_edge_detection/cpu_impl/double_thresholding.cpp:104:51: error: cannot convert ‘__m128i’ {aka ‘__vector(2) long long int’} to ‘__m256i’ {aka ‘__vector(4) long long int’} in initialization
+  104 |             __m256i i_res_hi = _mm256_cvttpd_epi32(result_hi);
+      |                                ~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~
+      |                                                   |
+      |                                                   __m128i {aka __vector(2) long long int}
+llm_output/20250611_171515_gemini-2.5-flash-preview-05-20/canny_edge_detection/cpu_impl/double_thresholding.cpp:113:37: error: ‘_mm_pack_epi32’ was not declared in this scope; did you mean ‘_mm_packs_epi32’?
+  113 |             __m128i packed_shorts = _mm_pack_epi32(i_res_lo_128, i_res_hi_128);
+      |                                     ^~~~~~~~~~~~~~
+      |                                     _mm_packs_epi32

@@ -1,0 +1,7 @@
+{
+  "convolutional_neural_network": {
+    "kernel_generation_success": true,
+    "compilation_success": false,
+    "execution_success": false
+  }
+}
