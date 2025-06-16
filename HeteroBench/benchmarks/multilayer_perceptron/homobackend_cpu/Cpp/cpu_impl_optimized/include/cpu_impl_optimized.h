@@ -41,6 +41,6 @@
 #define SIZE_A4 L3_H1 * L3_W2
 #define SIZE_Z4 L3_H1 * L3_W2
 
-void sigmoid(double *sigmoid_input, double *sigmoid_output, int size);
-void softmax(double *softmax_input, double *exp_results, double *softmax_output, int size);
-void dot_add(double *dot_add_input_x, double *dot_add_input_W, double *dot_add_input_b, double *dot_add_output, int x_h, int x_w, int W_h, int W_w);
+void sigmoid_optimized(double *sigmoid_input, double *sigmoid_output, int size);
+void softmax_optimized(double *softmax_input, double *exp_results, double *softmax_output, int size);
+void dot_add_optimized(double *dot_add_input_x, double *dot_add_input_W, double *dot_add_input_b, double *dot_add_output, int x_h, int x_w, int W_h, int W_w);

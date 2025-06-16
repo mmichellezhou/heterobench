@@ -24,9 +24,9 @@
 #define FULL_CONNECT_LAYER_SIZE_H FLATTENED_OUTPUT_SIZE
 #define FULL_CONNECT_LAYER_SIZE_W 2048
 
-void conv2d(double *conv2d_input, double *conv2d_kernel, double *input_padded, double conv2d_bias, int stride, int padding, int input_h, int input_w, int kernel_h, int kernel_w, double *conv2d_output);
-void relu(double *relu_input, double *relu_output, int size);
-void max_pooling(double *max_pooling_input, int pool_size, int pool_stride, int input_h, int input_w, double *max_pooling_output);
-void pad_input(double *pad_input_input, double *pad_input_output, int input_h, int input_w, int padding);
-void dot_add(double *dot_add_input_x, double *dot_add_input_W, double *dot_add_input_b, double *dot_add_output, int x_h, int x_w, int W_h, int W_w);
-void softmax(double *softmax_input, double *exp_results, double *softmax_output, int size);
+void conv2d_optimized(double *conv2d_input, double *conv2d_kernel, double *input_padded, double conv2d_bias, int stride, int padding, int input_h, int input_w, int kernel_h, int kernel_w, double *conv2d_output);
+void relu_optimized(double *relu_input, double *relu_output, int size);
+void max_pooling_optimized(double *max_pooling_input, int pool_size, int pool_stride, int input_h, int input_w, double *max_pooling_output);
+void pad_input_optimized(double *pad_input_input, double *pad_input_output, int input_h, int input_w, int padding);
+void dot_add_optimized(double *dot_add_input_x, double *dot_add_input_W, double *dot_add_input_b, double *dot_add_output, int x_h, int x_w, int W_h, int W_w);
+void softmax_optimized(double *softmax_input, double *exp_results, double *softmax_output, int size);
