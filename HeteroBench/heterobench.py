@@ -703,8 +703,14 @@ def run_makefile(benchmark, backend, env, action, options, log_file=None):
 
     # benchmark code resources
     if backend['cpu']:
-        make_cmd.append(f"cpu_sources={' '.join(cpu_sources_with_prefix)}")
-        make_template_vars["cpu_sources"] = ' '.join(cpu_sources_with_prefix)
+        # For original CPU sources, use relative paths with cpu_impl/ prefix
+        cpu_sources = [f"cpu_impl/{src}" for src in benchmark['krnl_sources']]
+        make_cmd.append(f"cpu_sources={' '.join(cpu_sources)}")
+        make_template_vars["cpu_sources"] = ' '.join(cpu_sources)
+        # Add optimized sources for CPU backend
+        cpu_sources_opt = [f"cpu_impl_optimized/{os.path.basename(src).replace('.cpp', '_optimized.cpp')}" for src in benchmark['krnl_sources']]
+        make_cmd.append(f"cpu_sources_opt={' '.join(cpu_sources_opt)}")
+        make_template_vars["cpu_sources_opt"] = ' '.join(cpu_sources_opt)
     if backend['gpu_omp']:
         make_cmd.append(f"gpu_sources={' '.join(gpu_sources_with_prefix)}")
         make_template_vars["gpu_sources"] = ' '.join(gpu_sources_with_prefix)
@@ -754,6 +760,9 @@ def run_makefile(benchmark, backend, env, action, options, log_file=None):
     elif action == "run":
         with open(log_file, 'a') as f:
             subprocess.run(make_cmd + ["run"], stdout=f, stderr=f, check=True)  
+    elif action == "run_simple":
+        with open(log_file, 'a') as f:
+            subprocess.run(make_cmd + ["run_simple", "-s"], stdout=f, stderr=f, check=True)
     else:
         pass
 
@@ -883,7 +892,7 @@ def main():
     # command line arguments list
     parser = argparse.ArgumentParser(description='Run benchmarks with specified actions.')
     parser.add_argument('benchmark', type=str, help='The name of the benchmark to run.')
-    parser.add_argument('action', choices=['build', 'run', 'clean', 'clean_all', 'clean_fpga'], \
+    parser.add_argument('action', choices=['build', 'run', 'run_simple', 'clean', 'clean_all', 'clean_fpga'], \
                         help='The action to perform on the benchmark.')
     parser.add_argument('backend', choices=['cpu', 'gpu_omp', 'gpu_cuda', 'gpu_acc', 'fpga', 'python', 'numba', 'hetero'], \
                             help='The backend to build the benchmark.')
@@ -896,14 +905,11 @@ def main():
     running_benchmark = args.benchmark
 
     # setup logging if the action is executing the benchmark
-    if args.action == "run":
+    if args.action == "run" or args.action == "run_simple":
         current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
         if not os.path.exists('logs'):
             os.makedirs('logs')
-        # log_file = f'logs_{args.benchmark}_{args.action}_{args.options}.log'
-        log_file = f'logs/{args.benchmark}_{args.action}{f"_{args.options}" if args.action == "run" else ""}_{current_time}.log'
-        # hw_type = f'' + ("_cpu" if has_cpu_impl else "") + ("_gpu" if has_gpu_impl else "") + ("_fpga" if has_fpga_impl else "")
-        # log_file = f'logs{hw_type}_{args.benchmark}_{args.action}_{args.options}.log'
+        log_file = f'logs/{args.benchmark}_{args.action}{f"_{args.options}" if args.action == "run" or args.action == "run_simple" else ""}_{current_time}.log'
         setup_logging(log_file)
     else:
         log_file = None

@@ -18,9 +18,9 @@ constexpr double dt = 0.0005;
 //
 //  saving parameters
 //
-const int NSTEPS = 20;
-const int NPARTICLES = 1000000;
-const int SAVEFREQ = 10;
+// const int NSTEPS = 20;
+// const int NPARTICLES = 1000000;
+// const int SAVEFREQ = 10;
 
 //
 // particle data structure
