@@ -18,53 +18,73 @@ HIGH_THRESHOLD := {{ high_threshold }}
 # iterations
 ITERATIONS := {{ iteration_times }}
 
-# Project name
+# Project names
 TARGET_EXEC := {{ target }}_sw
+TARGET_EXEC_SIMPLE := {{ target }}_sw_simple
 
 # Source files
 SOURCES := {{ sources }}
+SOURCES_SIMPLE := {{ sources_simple }}
 
 # MACRO DEFINITION
 MACRO := -DITERATIONS=$(ITERATIONS)
 
 # CPU Source files
 CPU_SOURCES := {{ cpu_sources }}
+CPU_SOURCES_OPT := {{ cpu_sources_opt }}
 
 # Object files
-OBJECTS := $(SOURCES:.cpp=.o) 
-
+OBJECTS := $(SOURCES:.cpp=.o)
+OBJECTS_SIMPLE := $(SOURCES_SIMPLE:.cpp=.o)
 CPU_OBJECTS := $(CPU_SOURCES:.cpp=.o)
+CPU_OBJECTS_OPT := $(CPU_SOURCES_OPT:.cpp=.o)
 
 # Include directories
 INCLUDE_DIRS := cpu_impl/include .
+INCLUDE_DIRS_SIMPLE := cpu_impl/include cpu_impl_optimized/include .
 INCLUDE_PARAMS := $(addprefix -I, $(INCLUDE_DIRS))
+INCLUDE_PARAMS_SIMPLE := $(addprefix -I, $(INCLUDE_DIRS_SIMPLE))
 
 # Default target
-all: $(TARGET_EXEC)
+all: $(TARGET_EXEC) $(TARGET_EXEC_SIMPLE)
 
 $(TARGET_EXEC): $(OBJECTS) $(CPU_OBJECTS)
+	$(CXX) $(LDFLAGS) -o $@ $^ $(OPENMP_LIBS)
+
+$(TARGET_EXEC_SIMPLE): $(OBJECTS_SIMPLE) $(CPU_OBJECTS) $(CPU_OBJECTS_OPT)
 	$(CXX) $(LDFLAGS) -o $@ $^ $(OPENMP_LIBS)
 
 main.o: main.cpp
 	$(CXX) $(CXXFLAGS) $(MACRO) $(INCLUDE_PARAMS) -c $< -o $@
 
+main_simple.o: main_simple.cpp
+	$(CXX) $(CXXFLAGS) $(MACRO) $(INCLUDE_PARAMS_SIMPLE) -c $< -o $@
+
 # To compile other CPU source files
 cpu_impl/%.o: cpu_impl/%.cpp
 	$(CXX) $(CXXFLAGS) $(MACRO) $(INCLUDE_PARAMS) -c $< -o $@
 
+# To compile optimized CPU source files
+cpu_impl_optimized/%.o: cpu_impl_optimized/%.cpp
+	$(CXX) $(CXXFLAGS) $(MACRO) $(INCLUDE_PARAMS_SIMPLE) -c $< -o $@
+
 # Run
-run:
+run: $(TARGET_EXEC)
 	{{ profiling_tool }} ./$(TARGET_EXEC) $(INPUT_PATH) $(OUTPUT_PATH) $(LOW_THRESHOLD) $(HIGH_THRESHOLD)
+
+run_simple: $(TARGET_EXEC_SIMPLE)
+	{{ profiling_tool }} ./$(TARGET_EXEC_SIMPLE) $(INPUT_PATH) $(OUTPUT_PATH) $(LOW_THRESHOLD) $(HIGH_THRESHOLD)
 
 # Clean up
 clean:
-	rm -f $(TARGET_EXEC) $(OBJECTS) $(CPU_OBJECTS)
+	rm -f $(TARGET_EXEC) $(TARGET_EXEC_SIMPLE) $(OBJECTS) $(OBJECTS_SIMPLE) $(CPU_OBJECTS) $(CPU_OBJECTS_OPT)
 
-.PHONY: all clean run help
+.PHONY: all clean run run_simple help
 
 help:
-	@echo "Usage: make [all|clean|run|help]"
-	@echo "  all:        Build the project"
+	@echo "Usage: make [all|clean|run|run_simple|help]"
+	@echo "  all:        Build both original and simple versions"
 	@echo "  clean:      Clean up the project"
-	@echo "  run:        Run the project"
+	@echo "  run:        Run the original version"
+	@echo "  run_simple: Run the simple version with both original and optimized"
 	@echo "  help:       Show this help message"

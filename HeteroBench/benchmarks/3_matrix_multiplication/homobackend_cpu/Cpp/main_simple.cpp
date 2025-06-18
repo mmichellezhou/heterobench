@@ -253,6 +253,7 @@ int main(int argc, char **argv) {
     kernel_3m_2_time += omp_get_wtime() - start_iteration_time;
   }
   cout << "Done" << endl;
+  
   // Run optimized implementation
   cout << "Running optimized implementation..." << endl;
   for (int i = 0; i < iterations; i++) {
