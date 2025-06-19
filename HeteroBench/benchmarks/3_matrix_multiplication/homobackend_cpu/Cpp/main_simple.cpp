@@ -253,7 +253,7 @@ int main(int argc, char **argv) {
     kernel_3m_2_time += omp_get_wtime() - start_iteration_time;
   }
   cout << "Done" << endl;
-  
+
   // Run optimized implementation
   cout << "Running optimized implementation..." << endl;
   for (int i = 0; i < iterations; i++) {
@@ -290,8 +290,8 @@ int main(int argc, char **argv) {
        << " seconds" << endl;
   cout << "  kernel_3m_2 time: " << (kernel_3m_2_time / iterations)
        << " seconds" << endl;
-  cout << "  Total time: " << original_total_time / iterations << " seconds"
-       << endl;
+  cout << "  Single iteration time: " << original_total_time / iterations
+       << " seconds" << endl;
   cout << "Optimized Implementation:" << endl;
   cout << "  kernel_3m_0 time: " << (kernel_3m_0_optimized_time / iterations)
        << " seconds" << endl;
@@ -299,8 +299,8 @@ int main(int argc, char **argv) {
        << " seconds" << endl;
   cout << "  kernel_3m_2 time: " << (kernel_3m_2_optimized_time / iterations)
        << " seconds" << endl;
-  cout << "  Total time: " << optimized_total_time / iterations << " seconds"
-       << endl;
+  cout << "  Single iteration time: " << optimized_total_time / iterations
+       << " seconds" << endl;
   cout << "Speedup:" << endl;
   cout << "  kernel_3m_0: " << (kernel_3m_0_time / kernel_3m_0_optimized_time)
        << "x" << endl;

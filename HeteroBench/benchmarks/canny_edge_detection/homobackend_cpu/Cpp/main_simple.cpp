@@ -237,14 +237,10 @@ int main(int argc, char **argv) {
   double original_total_time = gaussian_filter_time + gradient_time +
                                supp_time + threshold_time + hysteresis_time;
   double optimized_total_time = gaussian_filter_time_optimized +
-                                gradient_time_optimized
-                          + supp_time_optimized
-                         
-                          +
-                                threshold_time_optimized
-                          +
-                                hysteresis_time_optimized
-                         ;
+                                gradient_time_optimized + supp_time_optimized
+
+                                + threshold_time_optimized +
+                                hysteresis_time_optimized;
 
   /* Print results. */
   cout << "=======================================" << endl;
@@ -261,35 +257,33 @@ int main(int argc, char **argv) {
        << " seconds" << endl;
   cout << "  hysteresis time: " << hysteresis_time / iterations << " seconds"
        << endl;
-  cout << "  Total time: " << original_total_time << " seconds" << endl;
+  cout << "  Single iteration time: " << original_total_time / iterations
+       << " seconds" << endl;
   cout << "Optimized Implementation:" << endl;
   cout << "  gaussian_filter time: "
-       << gaussian_filter_time_optimized
- / iterations << " seconds" << endl;
+       << gaussian_filter_time_optimized / iterations << " seconds" << endl;
   cout << "  gradient_intensity_direction time: "
-       << gradient_time_optimized
- / iterations << " seconds" << endl;
+       << gradient_time_optimized / iterations << " seconds" << endl;
   cout << "  edge_thinning time: " << supp_time_optimized / iterations
        << " seconds" << endl;
   cout << "  double_threshold time: " << threshold_time_optimized / iterations
        << " seconds" << endl;
   cout << "  hysteresis time: " << hysteresis_time_optimized / iterations
        << " seconds" << endl;
-  cout << "  Total time: " << optimized_total_time << " seconds" << endl;
+  cout << "  Single iteration time: " << optimized_total_time / iterations
+       << " seconds" << endl;
   cout << "Speedup:" << endl;
   cout << "  gaussian_filter: "
-       << gaussian_filter_time / gaussian_filter_time_optimized
- << "x" << endl;
+       << gaussian_filter_time / gaussian_filter_time_optimized << "x" << endl;
   cout << "  gradient_intensity_direction: "
-       << gradient_time / gradient_time_optimized
- << "x" << endl;
+       << gradient_time / gradient_time_optimized << "x" << endl;
   cout << "  edge_thinning: " << supp_time / supp_time_optimized << "x" << endl;
   cout << "  double_threshold: " << threshold_time / threshold_time_optimized
        << "x" << endl;
   cout << "  hysteresis: " << hysteresis_time / hysteresis_time_optimized << "x"
        << endl;
-  cout << "  Total: " << original_total_time / optimized_total_time
-       << "x" << endl;
+  cout << "  Total: " << original_total_time / optimized_total_time << "x"
+       << endl;
   cout << "Whole time: " << whole_time << " seconds" << endl;
 
   delete[] gaussian_filter_output;

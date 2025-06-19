@@ -263,25 +263,22 @@ int main(int argc, char **argv) {
        << endl;
   cout << "  kernel_adi time: " << kernel_adi_time / iterations << " seconds"
        << endl;
-  cout << "  Total time: " << (init_array_time + kernel_adi_time) / iterations
+  cout << "  Single iteration time: " << original_total_time / iterations
        << " seconds" << endl;
   cout << "Optimized Implementation:" << endl;
   cout << "  init_array time: " << init_array_optimized_time / iterations
        << " seconds" << endl;
   cout << "  kernel_adi time: " << kernel_adi_optimized_time / iterations
        << " seconds" << endl;
-  cout << "  Total time: "
-       << (init_array_optimized_time + kernel_adi_optimized_time) / iterations
+  cout << "  Single iteration time: " << optimized_total_time / iterations
        << " seconds" << endl;
   cout << "Speedup:" << endl;
   cout << "  init_array: " << init_array_time / init_array_optimized_time << "x"
        << endl;
   cout << "  kernel_adi: " << kernel_adi_time / kernel_adi_optimized_time << "x"
        << endl;
-  cout << "  Total: "
-       << (init_array_time + kernel_adi_time) /
-              (init_array_optimized_time + kernel_adi_optimized_time)
-       << "x" << endl;
+  cout << "  Total: " << original_total_time / optimized_total_time << "x"
+       << endl;
   cout << "Whole time: " << whole_time << " seconds" << endl;
 
   free(((void *)A));
