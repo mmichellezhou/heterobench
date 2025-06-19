@@ -222,7 +222,7 @@ int main(int argc, char **argv) {
     cout << "Total " << error << " errors!" << endl;
   }
 
-  /* Performance measurements. */
+  /* Performance measurement. */
   int iterations = ITERATIONS;
   cout << "Running " << iterations
        << " iterations for performance measurement..." << endl;

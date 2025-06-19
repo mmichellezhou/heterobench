@@ -210,7 +210,7 @@ int main(int argc, char **argv) {
     cout << "Total " << error << " errors!" << endl;
   }
 
-  /* Performance measurements. */
+  /* Performance measurement. */
   int iterations = ITERATIONS;
   cout << "Running " << iterations
        << " iterations for performance measurement..." << endl;
@@ -219,8 +219,8 @@ int main(int argc, char **argv) {
   double start_iteration_time;
   double init_array_time = 0;
   double kernel_adi_time = 0;
-  double init_array_time_optimized = 0;
-  double kernel_adi_time_optimized = 0;
+  double init_array_optimized_time = 0;
+  double kernel_adi_optimized_time = 0;
 
   // Run original implementation
   cout << "Running original implementation..." << endl;
@@ -240,11 +240,11 @@ int main(int argc, char **argv) {
   for (int i = 0; i < iterations; i++) {
     start_iteration_time = omp_get_wtime();
     init_array_optimized(n, *X, *A, *B);
-    init_array_time_optimized += omp_get_wtime() - start_iteration_time;
+    init_array_optimized_time += omp_get_wtime() - start_iteration_time;
 
     start_iteration_time = omp_get_wtime();
     kernel_adi_optimized(tsteps, n, *X, *A, *B);
-    kernel_adi_time_optimized += omp_get_wtime() - start_iteration_time;
+    kernel_adi_optimized_time += omp_get_wtime() - start_iteration_time;
   }
   cout << "Done" << endl;
 
@@ -252,7 +252,7 @@ int main(int argc, char **argv) {
 
   double original_total_time = init_array_time + kernel_adi_time;
   double optimized_total_time =
-      init_array_time_optimized + kernel_adi_time_optimized;
+      init_array_optimized_time + kernel_adi_optimized_time;
 
   /* Print results. */
   cout << "=======================================" << endl;
@@ -266,21 +266,21 @@ int main(int argc, char **argv) {
   cout << "  Total time: " << (init_array_time + kernel_adi_time) / iterations
        << " seconds" << endl;
   cout << "Optimized Implementation:" << endl;
-  cout << "  init_array time: " << init_array_time_optimized / iterations
+  cout << "  init_array time: " << init_array_optimized_time / iterations
        << " seconds" << endl;
-  cout << "  kernel_adi time: " << kernel_adi_time_optimized / iterations
+  cout << "  kernel_adi time: " << kernel_adi_optimized_time / iterations
        << " seconds" << endl;
   cout << "  Total time: "
-       << (init_array_time_optimized + kernel_adi_time_optimized) / iterations
+       << (init_array_optimized_time + kernel_adi_optimized_time) / iterations
        << " seconds" << endl;
   cout << "Speedup:" << endl;
-  cout << "  init_array: " << init_array_time / init_array_time_optimized << "x"
+  cout << "  init_array: " << init_array_time / init_array_optimized_time << "x"
        << endl;
-  cout << "  kernel_adi: " << kernel_adi_time / kernel_adi_time_optimized << "x"
+  cout << "  kernel_adi: " << kernel_adi_time / kernel_adi_optimized_time << "x"
        << endl;
   cout << "  Total: "
        << (init_array_time + kernel_adi_time) /
-              (init_array_time_optimized + kernel_adi_time_optimized)
+              (init_array_optimized_time + kernel_adi_optimized_time)
        << "x" << endl;
   cout << "Whole time: " << whole_time << " seconds" << endl;
 
