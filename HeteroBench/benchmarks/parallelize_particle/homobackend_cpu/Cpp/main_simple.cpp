@@ -111,11 +111,11 @@ void parallelize_particle_simulation(int n, int nsteps, int savefreq, FILE* fsav
 	}
 	std::cout << "Done" << std::endl;
 
-	double end_whole_time = omp_get_wtime() - start_whole_time;
-	std::cout << "Total " << nsteps << " number of steps" << endl;
-	std::cout << "Single iteration time: " << (end_whole_time / nsteps) * 1000 << " ms" << endl;
-	std::cout << "Compute forces time: " << (start_compute_forces_time / nsteps) * 1000 << " ms" << endl;
-	std::cout << "Move particles time: " << (start_move_particles_time / nsteps) * 1000 << " ms" << endl;
+	// double end_whole_time = omp_get_wtime() - start_whole_time;
+	// std::cout << "Total " << nsteps << " number of steps" << endl;
+	// std::cout << "Single iteration time: " << (end_whole_time / nsteps) * 1000 << " ms" << endl;
+	// std::cout << "Compute forces time: " << (start_compute_forces_time / nsteps) * 1000 << " ms" << endl;
+	// std::cout << "Move particles time: " << (start_move_particles_time / nsteps) * 1000 << " ms" << endl;
 
 	grid_clear(grid);
 
@@ -176,120 +176,6 @@ void parallelize_particle_simulation_static(int n, int nsteps, int savefreq, FIL
 	}
 }
 
-void parallelize_particle_simulation_optimized(int n, int nsteps, int savefreq, FILE* fsave)
-{
-	double size = SIZE;
-
-	// Create a grid for optimizing the interactions
-	int gridSize = GRID_SIZE;
-
-	grid_t grid;
-	grid_init(grid, gridSize);
-
-	//Upper part no need to be reimplemented
-	for (int i = 0; i < n; ++i)
-	{
-		grid_add(grid, &particles_dyn[i]);
-	}
-
-	for (int i = 0; i < grid.size * grid.size; i++) {
-		if (grid.node_counts[i] > 1)
-			printf("Grid coordinate %d: %d nodes\n", i, grid.node_counts[i]);
-	}
-	std::cout << "Running 1 warm up iteration (optimized version)..." << std::endl;
-	// 1 warm up iteration
-	compute_forces_optimized(particles_dyn, n, grid);
-	move_particles_optimized(particles_dyn, n, grid);
-
-	std::cout << "Done" << std::endl;
-	std::cout << "Running " << nsteps << " iterations (optimized version)..." << std::endl;
-	// Simulate a number of time steps
-	double start_whole_time = omp_get_wtime();
-
-	double start_iteration_time;
-	double start_compute_forces_time = 0;
-	double start_move_particles_time = 0;
-
-	for (int step = 0; step < nsteps; step++)
-	{
-		// Compute forces
-		start_iteration_time = omp_get_wtime();
-		compute_forces_optimized(particles_dyn, n, grid);
-		start_compute_forces_time += omp_get_wtime() - start_iteration_time;
-
-		// Move particles
-		start_iteration_time = omp_get_wtime();
-		move_particles_optimized(particles_dyn, n, grid);
-		start_move_particles_time += omp_get_wtime() - start_iteration_time;
-
-		if (fsave && (step % savefreq) == 0)
-			save(fsave, n, particles);
-	}
-	std::cout << "Done" << std::endl;
-
-	double end_whole_time = omp_get_wtime() - start_whole_time;
-	std::cout << "Total " << nsteps << " number of steps" << endl;
-	std::cout << "Single iteration time: " << (end_whole_time / nsteps) * 1000 << " ms" << endl;
-	std::cout << "Compute forces time: " << (start_compute_forces_time / nsteps) * 1000 << " ms" << endl;
-	std::cout << "Move particles time: " << (start_move_particles_time / nsteps) * 1000 << " ms" << endl;
-
-	grid_clear(grid);
-
-	if (fsave)
-	{
-		fclose(fsave);
-	}
-}
-
-void parallelize_particle_simulation_static_optimized(int n, int nsteps, int savefreq, FILE* fsave)
-{
-	std::cout << "Running 1 warm up iteration (optimized version)..." << std::endl;
-	for (int i = 0; i < n; ++i)
-	{
-		grid_add_static(grid_static, &particles[i]);
-	}
-
-	// 1 warm up iteration
-	compute_forces_static_optimized(particles, n, grid_static);
-	move_particles_static_optimized(particles, n, grid_static);
-
-	std::cout << "Done" << std::endl;
-	std::cout << "Running " << nsteps << " iterations (optimized version)..." << std::endl;
-	// Simulate a number of time steps
-	double start_whole_time = omp_get_wtime();
-
-	double start_iteration_time;
-	double start_compute_forces_time = 0;
-	double start_move_particles_time = 0;
-
-	for (int step = 0; step < nsteps; step++)
-	{
-		// Compute forces
-		start_iteration_time = omp_get_wtime();
-		compute_forces_static_optimized(particles, n, grid_static);
-		start_compute_forces_time += omp_get_wtime() - start_iteration_time;
-
-		// Move particles
-		start_iteration_time = omp_get_wtime();
-		move_particles_static_optimized(particles, n, grid_static);
-		start_move_particles_time += omp_get_wtime() - start_iteration_time;
-
-		if (fsave && (step % savefreq) == 0)
-			save(fsave, n, particles);
-	}
-	double end_whole_time = omp_get_wtime() - start_whole_time;
-	std::cout << "Done" << std::endl;
-	std::cout << "Total " << nsteps << " number of steps" << endl;
-	std::cout << "Single iteration time: " << (end_whole_time / nsteps) * 1000 << " ms" << endl;
-	std::cout << "Compute forces time: " << (start_compute_forces_time / nsteps) * 1000 << " ms" << endl;
-	std::cout << "Move particles time: " << (start_move_particles_time / nsteps) * 1000 << " ms" << endl;
-
-	if (fsave)
-	{
-		fclose(fsave);
-	}
-}
-
 //
 //  benchmarking program
 //
@@ -309,26 +195,8 @@ int main( int argc, char **argv )
 
 	double size = set_size(n);
 	init_particles(n, particles_dyn, particles);
-
-	// Run original version
-	std::cout << "\nRunning original version..." << std::endl;
-	double start_time = omp_get_wtime();
 	parallelize_particle_simulation(n, nsteps, savefreq, fsave);
 	parallelize_particle_simulation_static(n, nsteps, savefreq, fsave);
-	double original_time = omp_get_wtime() - start_time;
-
-	// Run optimized version
-	std::cout << "\nRunning optimized version..." << std::endl;
-	start_time = omp_get_wtime();
-	parallelize_particle_simulation_optimized(n, nsteps, savefreq, fsave);
-	parallelize_particle_simulation_static_optimized(n, nsteps, savefreq, fsave);
-	double optimized_time = omp_get_wtime() - start_time;
-
-	// Print performance results
-	std::cout << "\nPerformance Results:" << std::endl;
-	std::cout << "Original version time: " << original_time << " seconds" << std::endl;
-	std::cout << "Optimized version time: " << optimized_time << " seconds" << std::endl;
-	std::cout << "Speedup: " << original_time / optimized_time << "x" << std::endl;
 
 	bool arrays_equal = compare_particle_arrays(particles_dyn, particles, NPARTICLES);
 

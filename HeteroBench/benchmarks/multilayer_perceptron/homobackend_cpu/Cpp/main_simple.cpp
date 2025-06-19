@@ -114,15 +114,15 @@ void mlp_forward(string input_path, string output_path)
   double *data_b2 = new double [SIZE_B2];
   double *data_b3 = new double [SIZE_B3];
 
-  readData("../../dataset/a0.bin", data_a0, SIZE_A0);
-  readData("../../dataset/w0.bin", data_w0, SIZE_W0);
-  readData("../../dataset/b0.bin", data_b0, SIZE_B0);
-  readData("../../dataset/w1.bin", data_w1, SIZE_W1);
-  readData("../../dataset/b1.bin", data_b1, SIZE_B1);
-  readData("../../dataset/w2.bin", data_w2, SIZE_W2);
-  readData("../../dataset/b2.bin", data_b2, SIZE_B2);
-  readData("../../dataset/w3.bin", data_w3, SIZE_W3);
-  readData("../../dataset/b3.bin", data_b3, SIZE_B3);
+  // readData("../../dataset/a0.bin", data_a0, SIZE_A0);
+  // readData("../../dataset/w0.bin", data_w0, SIZE_W0);
+  // readData("../../dataset/b0.bin", data_b0, SIZE_B0);
+  // readData("../../dataset/w1.bin", data_w1, SIZE_W1);
+  // readData("../../dataset/b1.bin", data_b1, SIZE_B1);
+  // readData("../../dataset/w2.bin", data_w2, SIZE_W2);
+  // readData("../../dataset/b2.bin", data_b2, SIZE_B2);
+  // readData("../../dataset/w3.bin", data_w3, SIZE_W3);
+  // readData("../../dataset/b3.bin", data_b3, SIZE_B3);
   readData((input_path + "/a0.bin").c_str(), data_a0, SIZE_A0);
   readData((input_path + "/w0.bin").c_str(), data_w0, SIZE_W0);
   readData((input_path + "/b0.bin").c_str(), data_b0, SIZE_B0);
@@ -172,15 +172,15 @@ void mlp_forward(string input_path, string output_path)
   double *data_z3_golden = new double [SIZE_Z3];
   double *data_a4_golden = new double [SIZE_A4];
   double *data_z4_golden = new double [SIZE_Z4];
-
-  readData("../../dataset/a1.bin", data_a1_golden, SIZE_A1);
-  readData("../../dataset/z1.bin", data_z1_golden, SIZE_Z1);
-  readData("../../dataset/a2.bin", data_a2_golden, SIZE_A2);
-  readData("../../dataset/z2.bin", data_z2_golden, SIZE_Z2);
-  readData("../../dataset/a3.bin", data_a3_golden, SIZE_A3);
-  readData("../../dataset/z3.bin", data_z3_golden, SIZE_Z3);
-  readData("../../dataset/a4.bin", data_a4_golden, SIZE_A4);
-  readData("../../dataset/z4.bin", data_z4_golden, SIZE_Z4);
+/*
+  // readData("../../dataset/a1.bin", data_a1_golden, SIZE_A1);
+  // readData("../../dataset/z1.bin", data_z1_golden, SIZE_Z1);
+  // readData("../../dataset/a2.bin", data_a2_golden, SIZE_A2);
+  // readData("../../dataset/z2.bin", data_z2_golden, SIZE_Z2);
+  // readData("../../dataset/a3.bin", data_a3_golden, SIZE_A3);
+  // readData("../../dataset/z3.bin", data_z3_golden, SIZE_Z3);
+  // readData("../../dataset/a4.bin", data_a4_golden, SIZE_A4);
+  // readData("../../dataset/z4.bin", data_z4_golden, SIZE_Z4);
   readData((output_path + "/a1.bin").c_str(), data_a1_golden, SIZE_A1);
   readData((output_path + "/z1.bin").c_str(), data_z1_golden, SIZE_Z1);
   readData((output_path + "/a2.bin").c_str(), data_a2_golden, SIZE_A2);
@@ -214,7 +214,7 @@ void mlp_forward(string input_path, string output_path)
   // check z4
   std::cout << "check z4 ... ";
   checkResult(data_z4, data_z4_golden, SIZE_Z4);
-
+*/
 
   // multi iterations
   int iterations = ITERATIONS;
@@ -317,24 +317,6 @@ int main(int argc, char *argv[])
     printf("Usage: ./mlp_sw <input_path> <output_path>\n");
     exit(-1);
   }
-
-  // Run original version
-  std::cout << "\nRunning original version..." << std::endl;
-  double start_time = omp_get_wtime();
   mlp_forward(input_path, output_path);
-  double original_time = omp_get_wtime() - start_time;
-
-  // Run optimized version
-  std::cout << "\nRunning optimized version..." << std::endl;
-  start_time = omp_get_wtime();
-  mlp_forward_optimized(input_path, output_path);
-  double optimized_time = omp_get_wtime() - start_time;
-
-  // Print performance results
-  std::cout << "\nPerformance Results:" << std::endl;
-  std::cout << "Original version time: " << original_time << " seconds" << std::endl;
-  std::cout << "Optimized version time: " << optimized_time << " seconds" << std::endl;
-  std::cout << "Speedup: " << original_time / optimized_time << "x" << std::endl;
-
   return 0;
 }

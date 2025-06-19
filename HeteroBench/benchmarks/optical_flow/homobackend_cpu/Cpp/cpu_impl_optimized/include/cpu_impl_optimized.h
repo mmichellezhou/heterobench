@@ -1,11 +1,12 @@
-#ifndef __CPU_IMPL_H__
-#define __CPU_IMPL_H__
+#ifndef __CPU_IMPL_OPTIMIZED_H__
+#define __CPU_IMPL_OPTIMIZED_H__
 
 typedef float pixel_t;
 typedef float outer_pixel_t;
 typedef double calc_pixel_t;
 typedef float vel_pixel_t;
 
+/*
 // convolution filters
 const int GRAD_WEIGHTS[] =  {1,-8,0,8,-1};
 const pixel_t GRAD_FILTER[] = {0.0755, 0.133, 0.1869, 0.2903, 0.1869, 0.133, 0.0755};
@@ -29,6 +30,7 @@ typedef struct{
     vel_pixel_t x;
     vel_pixel_t y;
 }velocity_t;
+*/
 
 void gradient_xy_calc_optimized(pixel_t frame[MAX_HEIGHT][MAX_WIDTH],
     pixel_t gradient_x[MAX_HEIGHT][MAX_WIDTH],

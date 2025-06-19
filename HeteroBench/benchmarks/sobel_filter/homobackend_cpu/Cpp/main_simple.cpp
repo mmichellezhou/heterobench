@@ -151,75 +151,6 @@ void sobel_filter_wrapper(string input_image_path, string output_image_path) {
     imwrite(output_image_path, sobel_image);
 }
 
-void sobel_filter_optimized(const uint8_t *input_image, int height, int width, uint8_t *output_image) {
-  uint64_t image_size = height * width;
-
-  double *sobel_x = new double[image_size];
-  double *sobel_y = new double[image_size];
-  double *gradient_magnitude = new double[image_size];
-  
-  // 1 warm up iteration
-  std::cout << "Running 1 warm up iteration (optimized version)..." << std::endl;
-  sobel_filter_x_optimized(input_image, height, width, sobel_x);
-  sobel_filter_y_optimized(input_image, height, width, sobel_y);
-  compute_gradient_magnitude_optimized(sobel_x, sobel_y, height, width, gradient_magnitude);
-  std::cout << "Done" << std::endl;
-
-  // multi iterations
-  int iterations = ITERATIONS;
-  std::cout << "Running " << iterations << " iterations (optimized version)..." << std::endl;
-
-  double start_whole_time = omp_get_wtime();
-
-  double start_iteration_time;
-  double sobel_filter_x_time = 0;
-  double sobel_filter_y_time = 0;
-  double gradient_magnitude_time = 0;
-
-  for (int i = 0; i < iterations; i++) {
-    start_iteration_time = omp_get_wtime();
-    sobel_filter_x_optimized(input_image, height, width, sobel_x);
-    sobel_filter_x_time += omp_get_wtime() - start_iteration_time;
-
-    start_iteration_time = omp_get_wtime();
-    sobel_filter_y_optimized(input_image, height, width, sobel_y);
-    sobel_filter_y_time += omp_get_wtime() - start_iteration_time;
-
-    start_iteration_time = omp_get_wtime();
-    compute_gradient_magnitude_optimized(sobel_x, sobel_y, height, width, gradient_magnitude);
-    gradient_magnitude_time += omp_get_wtime() - start_iteration_time;
-  }
-  std::cout << "Done" << std::endl;
-
-  double run_whole_time = omp_get_wtime() - start_whole_time;
-  cout << "1 warm up iteration and " << iterations << " iterations " << endl;
-  cout << "Single iteration time: " << (run_whole_time / iterations) * 1000 << " ms" << endl;
-  cout << "Sobel filter x time: " << (sobel_filter_x_time / iterations) * 1000 << " ms" << endl;
-  cout << "Sobel filter y time: " << (sobel_filter_y_time / iterations) * 1000 << " ms" << endl;
-  cout << "Gradient magnitude time: " << (gradient_magnitude_time / iterations) * 1000 << " ms" << endl;
-
-  for (int i = 0; i < height * width; ++i) {
-    output_image[i] = static_cast<uint8_t>(gradient_magnitude[i]);
-  }
-
-  delete[] sobel_x;
-  delete[] sobel_y;
-  delete[] gradient_magnitude;
-}
-
-void sobel_filter_wrapper_optimized(string input_image_path, string output_image_path) {
-    Image input_image = imread(input_image_path);
-    Image gray_image = cvtColor(input_image);
-
-    int width = gray_image.width;
-    int height = gray_image.height;
-    Image sobel_image(width, height, 1);
-
-    sobel_filter_optimized(gray_image.data.data(), height, width, sobel_image.data.data());
-
-    imwrite(output_image_path, sobel_image);
-}
-
 int main(int argc, char **argv) {
     std::cout << "=======================================" << std::endl;
     std::cout << "Running sobel_filter benchmark C++ Serial" << std::endl;
@@ -227,34 +158,16 @@ int main(int argc, char **argv) {
     
     string input_image_path;
     string output_image_path;
-    string output_image_path_optimized;
 
     if (argc == 3) {
         input_image_path = argv[1];
         output_image_path = argv[2];
-        output_image_path_optimized = string(argv[2]) + "_optimized.png";
     } else {
         printf("Usage: ./sobel_filter <input_image> <output_image>\n");
         exit(-1);
     }
 
-    // Run original version
-    std::cout << "\nRunning original version..." << std::endl;
-    double start_time = omp_get_wtime();
     sobel_filter_wrapper(input_image_path, output_image_path);
-    double original_time = omp_get_wtime() - start_time;
-
-    // Run optimized version
-    std::cout << "\nRunning optimized version..." << std::endl;
-    start_time = omp_get_wtime();
-    sobel_filter_wrapper_optimized(input_image_path, output_image_path_optimized);
-    double optimized_time = omp_get_wtime() - start_time;
-
-    // Print performance results
-    std::cout << "\nPerformance Results:" << std::endl;
-    std::cout << "Original version time: " << original_time << " seconds" << std::endl;
-    std::cout << "Optimized version time: " << optimized_time << " seconds" << std::endl;
-    std::cout << "Speedup: " << original_time / optimized_time << "x" << std::endl;
 
     return 0;
 }

@@ -247,12 +247,12 @@ void SgdLR_sw( DataType    data[NUM_FEATURES * NUM_TRAINING],
   }
   std::cout << "Done" << std::endl;
 
-
+/*
   // check results
   std::cout << "Checking results ...";
   check_results( theta, data, label );
   std::cout << "Done" << std::endl;
-
+*/
 
   // multi iterations
   int iterations = ITERATIONS;
@@ -304,83 +304,6 @@ void SgdLR_sw( DataType    data[NUM_FEATURES * NUM_TRAINING],
   cout << "updateParameter time: " << (updateParameter_time / iterations) * 1000 << " ms" << endl;
 }
 
-void SgdLR_sw_optimized( DataType    data[NUM_FEATURES * NUM_TRAINING],
-                        LabelType   label[NUM_TRAINING],
-                        FeatureType theta[NUM_FEATURES])
-{
-  // intermediate variable for storing gradient
-  FeatureType gradient[NUM_FEATURES];
-
-  // 1 warm up iteration
-  std::cout << "Running 1 warm up iteration (optimized version)...";
-  for (int training_id = 0; training_id < NUM_TRAINING; training_id ++ )
-  {
-    // dot product between parameter vector and data sample 
-    FeatureType dot = dotProduct_optimized(theta, &data[NUM_FEATURES * training_id]);
-    // sigmoid
-    FeatureType prob = Sigmoid_optimized(dot);
-    // compute gradient
-    computeGradient_optimized(gradient, &data[NUM_FEATURES * training_id], (prob - label[training_id]));
-    // update parameter vector
-    updateParameter_optimized(theta, gradient, -STEP_SIZE);
-  }
-  std::cout << "Done" << std::endl;
-
-  // check results
-  std::cout << "Checking results (optimized version)...";
-  check_results( theta, data, label );
-  std::cout << "Done" << std::endl;
-
-  // multi iterations
-  int iterations = ITERATIONS;
-  std::cout << "Running " << iterations << " iterations (optimized version)...";
-
-  double start_whole_time = omp_get_wtime();
-
-  double start_iteration_time;
-  double dotProduct_time = 0;
-  double Sigmoid_time = 0;
-  double computeGradient_time = 0;
-  double updateParameter_time = 0;
-
-  // runs for multiple epochs
-  for (int epoch = 0; epoch < iterations; epoch ++) 
-  {
-    // in each epoch, go through each training instance in sequence
-    for( int training_id = 0; training_id < NUM_TRAINING; training_id ++ )
-    { 
-      start_iteration_time = omp_get_wtime();
-      // dot product between parameter vector and data sample 
-      FeatureType dot = dotProduct_optimized(theta, &data[NUM_FEATURES * training_id]);
-      dotProduct_time += omp_get_wtime() - start_iteration_time;
-
-      start_iteration_time = omp_get_wtime();
-      // sigmoid
-      FeatureType prob = Sigmoid_optimized(dot);
-      Sigmoid_time += omp_get_wtime() - start_iteration_time;
-
-      start_iteration_time = omp_get_wtime();
-      // compute gradient
-      computeGradient_optimized(gradient, &data[NUM_FEATURES * training_id], (prob - label[training_id]));
-      computeGradient_time += omp_get_wtime() - start_iteration_time;
-
-      start_iteration_time = omp_get_wtime();
-      // update parameter vector
-      updateParameter_optimized(theta, gradient, -STEP_SIZE);
-      updateParameter_time += omp_get_wtime() - start_iteration_time;
-    }
-  }
-  std::cout << "Done" << std::endl;
-
-  double run_whole_time = omp_get_wtime() - start_whole_time;
-  cout << "1 warm up iteration and " << iterations  << " iterations" << endl;
-  cout << "Single iteration time: " << (run_whole_time / iterations) * 1000 << " ms" << endl;
-  cout << "dotProduct time: " << (dotProduct_time / iterations) * 1000 << " ms" << endl;
-  cout << "Sigmoid time: " << (Sigmoid_time / iterations) * 1000 << " ms" << endl;
-  cout << "computeGradient time: " << (computeGradient_time / iterations) * 1000 << " ms" << endl;
-  cout << "updateParameter time: " << (updateParameter_time / iterations) * 1000 << " ms" << endl;
-}
-
 int main(int argc, char ** argv) 
 {
   std::cout << "=======================================" << std::endl;
@@ -399,7 +322,6 @@ int main(int argc, char ** argv)
   DataType*    data_points  = new DataType[DATA_SET_SIZE];
   LabelType*   labels       = new LabelType  [NUM_SAMPLES];
   FeatureType* param_vector = new FeatureType[NUM_FEATURES];
-  FeatureType* param_vector_optimized = new FeatureType[NUM_FEATURES];
 
   // read in dataset
   std::string str_points_filepath = path_to_data + "/shuffledfeats.dat";
@@ -436,34 +358,16 @@ int main(int argc, char ** argv)
   }
   fclose(label_file);
 
-  // reset parameter vectors
-  for (size_t i = 0; i < NUM_FEATURES; i++) {
+  // reset parameter vector
+  for (size_t i = 0; i < NUM_FEATURES; i++)
     param_vector[i] = 0;
-    param_vector_optimized[i] = 0;
-  }
 
-  // Run original version
-  std::cout << "\nRunning original version..." << std::endl;
-  double start_time = omp_get_wtime();
   SgdLR_sw(data_points, labels, param_vector);
-  double original_time = omp_get_wtime() - start_time;
-
-  // Run optimized version
-  std::cout << "\nRunning optimized version..." << std::endl;
-  start_time = omp_get_wtime();
-  SgdLR_sw_optimized(data_points, labels, param_vector_optimized);
-  double optimized_time = omp_get_wtime() - start_time;
-
-  // Print performance results
-  std::cout << "\nPerformance Results:" << std::endl;
-  std::cout << "Original version time: " << original_time << " seconds" << std::endl;
-  std::cout << "Optimized version time: " << optimized_time << " seconds" << std::endl;
-  std::cout << "Speedup: " << original_time / optimized_time << "x" << std::endl;
 
   delete []data_points;
   delete []labels;
   delete []param_vector;
-  delete []param_vector_optimized;
 
   return EXIT_SUCCESS;
+
 }

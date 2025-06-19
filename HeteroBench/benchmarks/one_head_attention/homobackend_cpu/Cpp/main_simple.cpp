@@ -99,7 +99,7 @@ void compareResults(double *original, double *optimized, size_t size,
       error++;
     }
   }
-  if (error == 0) {
+  if (!error) {
     cout << name << ": Pass (Original and optimized match)" << endl;
   } else {
     cout << name << ": Fail (Original and optimized differ)" << endl;
