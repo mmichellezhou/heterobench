@@ -136,9 +136,9 @@ int main(int argc,char **argv)
 
   // 1 warm up iteration
   std::cout << "Running 1 warm up iteration ..." << std::endl;
-  kernel_3m_0(*A, *B, *E);
-  kernel_3m_1(*C, *D, *F);
-  kernel_3m_2(*E, *F, *G);
+  kernel_3mm_0(*A, *B, *E);
+  kernel_3mm_1(*C, *D, *F);
+  kernel_3mm_2(*E, *F, *G);
   std::cout << "Done" << std::endl;
 
 
@@ -173,22 +173,22 @@ int main(int argc,char **argv)
 
   double start_whole_time = omp_get_wtime();
   double start_iteration_time;
-  double kernel_3m_0_time = 0;
-  double kernel_3m_1_time = 0;
-  double kernel_3m_2_time = 0;
+  double kernel_3mm_0_time = 0;
+  double kernel_3mm_1_time = 0;
+  double kernel_3mm_2_time = 0;
 
   for (int i = 0; i < iterations; i++){
     start_iteration_time = omp_get_wtime();
-    kernel_3m_0(*A, *B, *E);
-    kernel_3m_0_time += omp_get_wtime() - start_iteration_time;
+    kernel_3mm_0(*A, *B, *E);
+    kernel_3mm_0_time += omp_get_wtime() - start_iteration_time;
 
     start_iteration_time = omp_get_wtime();
-    kernel_3m_1(*C, *D, *F);
-    kernel_3m_1_time += omp_get_wtime() - start_iteration_time;
+    kernel_3mm_1(*C, *D, *F);
+    kernel_3mm_1_time += omp_get_wtime() - start_iteration_time;
 
     start_iteration_time = omp_get_wtime();
-    kernel_3m_2(*E, *F, *G);
-    kernel_3m_2_time += omp_get_wtime() - start_iteration_time;
+    kernel_3mm_2(*E, *F, *G);
+    kernel_3mm_2_time += omp_get_wtime() - start_iteration_time;
   }
 
   std::cout << "Done" << std::endl;
@@ -196,9 +196,9 @@ int main(int argc,char **argv)
   double run_whole_time = omp_get_wtime() - start_whole_time;
   cout << "1 warm up iteration and " << iterations << " iterations " << endl;
   cout << "Single iteration time: " << (run_whole_time / iterations) * 1000 << " ms" << endl;
-  cout << "Kernel 3mm 0 time: " << (kernel_3m_0_time / iterations) * 1000 << " ms" << endl;
-  cout << "Kernel 3mm 1 time: " << (kernel_3m_1_time / iterations) * 1000 << " ms" << endl;
-  cout << "Kernel 3mm 2 time: " << (kernel_3m_2_time / iterations) * 1000 << " ms" << endl;
+  cout << "Kernel 3mm 0 time: " << (kernel_3mm_0_time / iterations) * 1000 << " ms" << endl;
+  cout << "Kernel 3mm 1 time: " << (kernel_3mm_1_time / iterations) * 1000 << " ms" << endl;
+  cout << "Kernel 3mm 2 time: " << (kernel_3mm_2_time / iterations) * 1000 << " ms" << endl;
 
   free(((void *)E));
   free(((void *)A));

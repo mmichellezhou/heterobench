@@ -175,9 +175,9 @@ int main(int argc, char **argv) {
   // Warm up and test original implementation
   cout << "Running 1 warm up iteration for original implementation..." << endl;
   reinit_output_array(*E, *F, *G);
-  kernel_3m_0(*A, *B, *E);
-  kernel_3m_1(*C, *D, *F);
-  kernel_3m_2(*E, *F, *G);
+  kernel_3mm_0(*A, *B, *E);
+  kernel_3mm_1(*C, *D, *F);
+  kernel_3mm_2(*E, *F, *G);
   cout << "Done" << endl;
 
   // Check original implementation results
@@ -200,9 +200,9 @@ int main(int argc, char **argv) {
   // Warm up and test optimized implementation
   cout << "Running 1 warm up iteration for optimized implementation..." << endl;
   reinit_output_array(*E, *F, *G);
-  kernel_3m_0_optimized(*A, *B, *E);
-  kernel_3m_1_optimized(*C, *D, *F);
-  kernel_3m_2_optimized(*E, *F, *G);
+  kernel_3mm_0_optimized(*A, *B, *E);
+  kernel_3mm_1_optimized(*C, *D, *F);
+  kernel_3mm_2_optimized(*E, *F, *G);
   cout << "Done" << endl;
 
   // Check optimized implementation results
@@ -229,28 +229,28 @@ int main(int argc, char **argv) {
 
   double start_whole_time = omp_get_wtime();
   double start_iteration_time;
-  double kernel_3m_0_time = 0;
-  double kernel_3m_1_time = 0;
-  double kernel_3m_2_time = 0;
-  double kernel_3m_0_optimized_time = 0;
-  double kernel_3m_1_optimized_time = 0;
-  double kernel_3m_2_optimized_time = 0;
+  double kernel_3mm_0_time = 0;
+  double kernel_3mm_1_time = 0;
+  double kernel_3mm_2_time = 0;
+  double kernel_3mm_0_optimized_time = 0;
+  double kernel_3mm_1_optimized_time = 0;
+  double kernel_3mm_2_optimized_time = 0;
 
   // Run original implementation
   cout << "Running original implementation..." << endl;
   for (int i = 0; i < iterations; i++) {
 
     start_iteration_time = omp_get_wtime();
-    kernel_3m_0(*A, *B, *E);
-    kernel_3m_0_time += omp_get_wtime() - start_iteration_time;
+    kernel_3mm_0(*A, *B, *E);
+    kernel_3mm_0_time += omp_get_wtime() - start_iteration_time;
 
     start_iteration_time = omp_get_wtime();
-    kernel_3m_1(*C, *D, *F);
-    kernel_3m_1_time += omp_get_wtime() - start_iteration_time;
+    kernel_3mm_1(*C, *D, *F);
+    kernel_3mm_1_time += omp_get_wtime() - start_iteration_time;
 
     start_iteration_time = omp_get_wtime();
-    kernel_3m_2(*E, *F, *G);
-    kernel_3m_2_time += omp_get_wtime() - start_iteration_time;
+    kernel_3mm_2(*E, *F, *G);
+    kernel_3mm_2_time += omp_get_wtime() - start_iteration_time;
   }
   cout << "Done" << endl;
 
@@ -258,55 +258,55 @@ int main(int argc, char **argv) {
   cout << "Running optimized implementation..." << endl;
   for (int i = 0; i < iterations; i++) {
     start_iteration_time = omp_get_wtime();
-    kernel_3m_0_optimized(*A, *B, *E);
-    kernel_3m_0_optimized_time += omp_get_wtime() - start_iteration_time;
+    kernel_3mm_0_optimized(*A, *B, *E);
+    kernel_3mm_0_optimized_time += omp_get_wtime() - start_iteration_time;
 
     start_iteration_time = omp_get_wtime();
-    kernel_3m_1_optimized(*C, *D, *F);
-    kernel_3m_1_optimized_time += omp_get_wtime() - start_iteration_time;
+    kernel_3mm_1_optimized(*C, *D, *F);
+    kernel_3mm_1_optimized_time += omp_get_wtime() - start_iteration_time;
 
     start_iteration_time = omp_get_wtime();
-    kernel_3m_2_optimized(*E, *F, *G);
-    kernel_3m_2_optimized_time += omp_get_wtime() - start_iteration_time;
+    kernel_3mm_2_optimized(*E, *F, *G);
+    kernel_3mm_2_optimized_time += omp_get_wtime() - start_iteration_time;
   }
   cout << "Done" << endl;
 
   double whole_time = omp_get_wtime() - start_whole_time;
 
   double original_total_time =
-      kernel_3m_0_time + kernel_3m_1_time + kernel_3m_2_time;
-  double optimized_total_time = kernel_3m_0_optimized_time +
-                                kernel_3m_1_optimized_time +
-                                kernel_3m_2_optimized_time;
+      kernel_3mm_0_time + kernel_3mm_1_time + kernel_3mm_2_time;
+  double optimized_total_time = kernel_3mm_0_optimized_time +
+                                kernel_3mm_1_optimized_time +
+                                kernel_3mm_2_optimized_time;
 
   /* Print results. */
   cout << "=======================================" << endl;
   cout << "Performance Results:" << endl;
   cout << "=======================================" << endl;
   cout << "Original Implementation:" << endl;
-  cout << "  kernel_3m_0 time: " << (kernel_3m_0_time / iterations)
+  cout << "  kernel_3mm_0 time: " << (kernel_3mm_0_time / iterations)
        << " seconds" << endl;
-  cout << "  kernel_3m_1 time: " << (kernel_3m_1_time / iterations)
+  cout << "  kernel_3mm_1 time: " << (kernel_3mm_1_time / iterations)
        << " seconds" << endl;
-  cout << "  kernel_3m_2 time: " << (kernel_3m_2_time / iterations)
+  cout << "  kernel_3mm_2 time: " << (kernel_3mm_2_time / iterations)
        << " seconds" << endl;
   cout << "  Single iteration time: " << original_total_time / iterations
        << " seconds" << endl;
   cout << "Optimized Implementation:" << endl;
-  cout << "  kernel_3m_0 time: " << (kernel_3m_0_optimized_time / iterations)
+  cout << "  kernel_3mm_0 time: " << (kernel_3mm_0_optimized_time / iterations)
        << " seconds" << endl;
-  cout << "  kernel_3m_1 time: " << (kernel_3m_1_optimized_time / iterations)
+  cout << "  kernel_3mm_1 time: " << (kernel_3mm_1_optimized_time / iterations)
        << " seconds" << endl;
-  cout << "  kernel_3m_2 time: " << (kernel_3m_2_optimized_time / iterations)
+  cout << "  kernel_3mm_2 time: " << (kernel_3mm_2_optimized_time / iterations)
        << " seconds" << endl;
   cout << "  Single iteration time: " << optimized_total_time / iterations
        << " seconds" << endl;
   cout << "Speedup:" << endl;
-  cout << "  kernel_3m_0: " << (kernel_3m_0_time / kernel_3m_0_optimized_time)
+  cout << "  kernel_3mm_0: " << (kernel_3mm_0_time / kernel_3mm_0_optimized_time)
        << "x" << endl;
-  cout << "  kernel_3m_1: " << (kernel_3m_1_time / kernel_3m_1_optimized_time)
+  cout << "  kernel_3mm_1: " << (kernel_3mm_1_time / kernel_3mm_1_optimized_time)
        << "x" << endl;
-  cout << "  kernel_3m_2: " << (kernel_3m_2_time / kernel_3m_2_optimized_time)
+  cout << "  kernel_3mm_2: " << (kernel_3mm_2_time / kernel_3mm_2_optimized_time)
        << "x" << endl;
   cout << "  Total: " << (original_total_time / optimized_total_time) << "x"
        << endl;

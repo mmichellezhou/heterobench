@@ -5,7 +5,8 @@ import json
 import argparse
 from datetime import datetime
 import logging
-from agent import KernelCodeGenerator
+import subprocess
+from agent import HeteroBenchCodeGenerator
 from llm import LLM
 from tqdm import tqdm
 from plot import plot_speedup
@@ -42,84 +43,203 @@ def setup_logging(output_dir: str):
     
     return log_file
 
-# Example PolyBench kernels
-POLYBENCH_CODE_PATH = {
-    # datamining
-    "correlation": "polybench/datamining/correlation/correlation_simple.c",
-    "covariance": "polybench/datamining/covariance/covariance_simple.c",
-    # linear-algebra/blas
-    "gemm": "polybench/linear-algebra/blas/gemm/gemm_simple.c",
-    "gemver": "polybench/linear-algebra/blas/gemver/gemver_simple.c",
-    "gesummv": "polybench/linear-algebra/blas/gesummv/gesummv_simple.c",
-    "symm": "polybench/linear-algebra/blas/symm/symm_simple.c",
-    "syr2k": "polybench/linear-algebra/blas/syr2k/syr2k_simple.c",
-    "syrk": "polybench/linear-algebra/blas/syrk/syrk_simple.c",
-    "trmm": "polybench/linear-algebra/blas/trmm/trmm_simple.c",
-    # linear-algebra/kernels
-    "2mm": "polybench/linear-algebra/kernels/2mm/2mm_simple.c",
-    "3mm": "polybench/linear-algebra/kernels/3mm/3mm_simple.c",
-    "atax": "polybench/linear-algebra/kernels/atax/atax_simple.c",
-    "bicg": "polybench/linear-algebra/kernels/bicg/bicg_simple.c",
-    "doitgen": "polybench/linear-algebra/kernels/doitgen/doitgen_simple.c",
-    "mvt": "polybench/linear-algebra/kernels/mvt/mvt_simple.c",
-    # linear-algebra/solvers
-    "cholesky": "polybench/linear-algebra/solvers/cholesky/cholesky_simple.c",
-    "durbin": "polybench/linear-algebra/solvers/durbin/durbin_simple.c",
-    "gramschmidt": "polybench/linear-algebra/solvers/gramschmidt/gramschmidt_simple.c",
-    "lu": "polybench/linear-algebra/solvers/lu/lu_simple.c",
-    "ludcmp": "polybench/linear-algebra/solvers/ludcmp/ludcmp_simple.c",
-    "trisolv": "polybench/linear-algebra/solvers/trisolv/trisolv_simple.c",
-    # medley
-    "deriche": "polybench/medley/deriche/deriche_simple.c",
-    "floyd-warshall": "polybench/medley/floyd-warshall/floyd-warshall_simple.c",
-    "nussinov": "polybench/medley/nussinov/nussinov_simple.c",
-    # stencils
-    "adi": "polybench/stencils/adi/adi_simple.c",
-    "fdtd-2d": "polybench/stencils/fdtd-2d/fdtd-2d_simple.c",
-    "heat-3d": "polybench/stencils/heat-3d/heat-3d_simple.c",
-    "jacobi-1d": "polybench/stencils/jacobi-1d/jacobi-1d_simple.c",
-    "jacobi-2d": "polybench/stencils/jacobi-2d/jacobi-2d_simple.c",
-    "seidel-2d": "polybench/stencils/seidel-2d/seidel-2d_simple.c" 
+# HeteroBench benchmarks
+HETEROBENCH_BENCHMARKS = {
+    "optical_flow": "benchmarks/optical_flow",
+    "canny_edge_detection": "benchmarks/canny_edge_detection", 
+    "convolutional_neural_network": "benchmarks/convolutional_neural_network",
+    "multilayer_perceptron": "benchmarks/multilayer_perceptron",
+    "one_head_attention": "benchmarks/one_head_attention",
+    "spam_filter": "benchmarks/spam_filter",
+    "3_matrix_multiplication": "benchmarks/3_matrix_multiplication",
+    "alternating_direction_implicit": "benchmarks/alternating_direction_implicit",
+    "digit_recog": "benchmarks/digit_recog",
+    "parallelize_particle": "benchmarks/parallelize_particle",
+    "sobel_filter": "benchmarks/sobel_filter"
 }
 
-def process_kernels(generator: KernelCodeGenerator, kernel_names: List[str], output_dir: str, model: str, provider: str) -> Dict:
+def run_benchmark_and_analyze(benchmark_name: str, benchmark_path: str, output_dir: str) -> Dict:
     """
-    Process a list of kernels and save the results.
+    Run the benchmark's main_simple.cpp and analyze the output for performance metrics.
     
     Args:
-        generator: The KernelCodeGenerator instance
-        kernel_names: List of kernel names to process
+        benchmark_name: Name of the benchmark
+        benchmark_path: Path to the benchmark directory
+        output_dir: Directory to save outputs
+        
+    Returns:
+        Dictionary containing performance analysis results
+    """
+    cpp_path = os.path.join(benchmark_path, "homobackend_cpu", "Cpp")
+    
+    if not os.path.exists(cpp_path):
+        raise FileNotFoundError(f"CPP directory not found: {cpp_path}")
+    
+    # Change to the CPP directory
+    original_cwd = os.getcwd()
+    os.chdir(cpp_path)
+    
+    try:
+        # Build the benchmark
+        logging.info(f"Building {benchmark_name}...")
+        build_result = subprocess.run(
+            ["make", "run_simple"],
+            capture_output=True,
+            text=True,
+            timeout=300
+        )
+        
+        # Ensure output directory exists
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Save build output
+        with open(os.path.join(output_dir, f"{benchmark_name}_build_output.txt"), 'w') as f:
+            f.write("BUILD COMMAND: make run_simple\n")
+            f.write("STDOUT:\n")
+            f.write(build_result.stdout)
+            f.write("\nSTDERR:\n")
+            f.write(build_result.stderr)
+        
+        # Analyze the output
+        analysis = {
+            "verification_success": False,
+            "original_time": None,
+            "optimized_time": None,
+            "speedup": None,
+            "build_success": build_result.returncode == 0
+        }
+        
+        if build_result.returncode == 0:
+            # Parse the output for performance metrics
+            lines = build_result.stdout.split('\n')
+            
+            for i, line in enumerate(lines):
+                line = line.strip()
+                
+                # Look for verification results
+                if "Results:" in line and "Pass" in line:
+                    analysis["verification_success"] = True
+                elif "Results:" in line and "Fail" in line:
+                    analysis["verification_success"] = False
+                
+                # Look for speedup
+                elif "Speedup:" in line:
+                    # Look for "Total:" on the next few lines
+                    for j in range(i+1, min(i+10, len(lines))):
+                        next_line = lines[j].strip()
+                        if "Total:" in next_line:
+                            try:
+                                # Extract speedup value (format: "Total: X.XXXXXXx")
+                                speedup_str = next_line.split(":")[-1].replace("x", "").strip()
+                                analysis["speedup"] = float(speedup_str)
+                            except (ValueError, IndexError):
+                                pass
+                            break
+                
+                # Look for timing information
+                elif "Original Implementation:" in line:
+                    for j in range(i+1, min(i+10, len(lines))):
+                        next_line = lines[j].strip()
+                        if "Single iteration time:" in next_line:
+                            try:
+                                time_str = next_line.split(":")[-1].replace("seconds", "").strip()
+                                analysis["original_time"] = float(time_str)
+                            except (ValueError, IndexError):
+                                pass
+                            break
+                
+                elif "Optimized Implementation:" in line:
+                    for j in range(i+1, min(i+10, len(lines))):
+                        next_line = lines[j].strip()
+                        if "Single iteration time:" in next_line:
+                            try:
+                                time_str = next_line.split(":")[-1].replace("seconds", "").strip()
+                                analysis["optimized_time"] = float(time_str)
+                            except (ValueError, IndexError):
+                                pass
+                            break
+        
+        # Calculate speedup if we have both timing values but speedup parsing failed
+        if analysis["speedup"] is None and analysis["original_time"] is not None and analysis["optimized_time"] is not None:
+            if analysis["optimized_time"] > 0:
+                analysis["speedup"] = analysis["original_time"] / analysis["optimized_time"]
+        
+        return analysis
+        
+    finally:
+        # Change back to original directory
+        os.chdir(original_cwd)
+
+def process_benchmarks(generator: HeteroBenchCodeGenerator, kernel_names: List[str], output_dir: str, model: str, provider: str) -> Dict:
+    """
+    Process a list of HeteroBench benchmarks and save the results.
+    
+    Args:
+        generator: The HeteroBenchCodeGenerator instance
+        kernel_names: List of benchmark names to process
         output_dir: Base output directory
         model: Model name being used
         provider: Provider name being used
         
     Returns:
-        Dictionary containing results for all processed kernels
+        Dictionary containing results for all processed benchmarks
     """
     all_results = {}
-    for kernel_name in kernel_names:
-        if kernel_name not in POLYBENCH_CODE_PATH:
-            logging.error(f"Kernel '{kernel_name}' not found. Available kernels: {', '.join(POLYBENCH_CODE_PATH.keys())}")
+    
+    for benchmark_name in kernel_names:
+        if benchmark_name not in HETEROBENCH_BENCHMARKS:
+            logging.error(f"Benchmark '{benchmark_name}' not found. Available benchmarks: {', '.join(HETEROBENCH_BENCHMARKS.keys())}")
             continue
             
-        kernel_code_path = POLYBENCH_CODE_PATH[kernel_name]
-        kernel_output_dir = os.path.join(output_dir, kernel_name)
-        os.makedirs(kernel_output_dir, exist_ok=True)
+        benchmark_path = HETEROBENCH_BENCHMARKS[benchmark_name]
         
-        # Process the kernel
-        results = generator.process_kernel(kernel_code_path, kernel_name, kernel_output_dir)
+        logging.info(f"Processing benchmark '{benchmark_name}'...")
         
-        # Collect status and speedup for each kernel
-        kernel_summary = {
-            "kernel_generation_success": results["kernel_generation_success"],
-            "compilation_success": results["compilation_success"],
-            "execution_success": results["execution_success"],
-            "verification_success": results["verification_success"],
-        }
-        # Add speedup if available
-        if "run_analysis" in results and results["run_analysis"].get("speedup") is not None:
-            kernel_summary["speedup"] = results["run_analysis"]["speedup"]
-        all_results[kernel_name] = kernel_summary
+        try:
+            # Process all functions in the benchmark
+            function_results = generator.process_benchmark(benchmark_name, benchmark_path, output_dir)
+            
+            # Run the benchmark and analyze performance
+            performance_analysis = run_benchmark_and_analyze(benchmark_name, benchmark_path, output_dir)
+            
+            # Collect overall benchmark status
+            benchmark_summary = {
+                "function_results": function_results,
+                "performance_analysis": performance_analysis,
+                "overall_status": {
+                    "functions_processed": len(function_results),
+                    "functions_successful": sum(1 for r in function_results.values() if r.get("function_generation_success", False)),
+                    "build_success": performance_analysis.get("build_success", False),
+                    "verification_success": performance_analysis.get("verification_success", False)
+                }
+            }
+            
+            # Add speedup if available
+            if performance_analysis.get("speedup") is not None:
+                benchmark_summary["speedup"] = performance_analysis["speedup"]
+            
+            all_results[benchmark_name] = benchmark_summary
+            
+            # Log results
+            logging.info(f"✓ Benchmark '{benchmark_name}' completed")
+            if performance_analysis.get("speedup"):
+                logging.info(f"  Speedup: {performance_analysis['speedup']:.2f}x")
+            if performance_analysis.get("verification_success"):
+                logging.info(f"  Verification: ✓ PASS")
+            else:
+                logging.warning(f"  Verification: ✗ FAIL")
+                
+        except Exception as e:
+            logging.error(f"✗ Error processing benchmark '{benchmark_name}': {str(e)}")
+            all_results[benchmark_name] = {
+                "error": str(e),
+                "overall_status": {
+                    "functions_processed": 0,
+                    "functions_successful": 0,
+                    "build_success": False,
+                    "verification_success": False
+                }
+            }
     
     # Save aggregated results
     all_summary_path = os.path.join(output_dir, "all_summary.json")
@@ -132,17 +252,17 @@ def process_kernels(generator: KernelCodeGenerator, kernel_names: List[str], out
 
 def main():
     """
-    Main function to demonstrate the framework.
+    Main function to demonstrate the HeteroBench optimization framework.
     """
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Generate optimized kernel code using LLMs')
+    parser = argparse.ArgumentParser(description='Generate optimized code for HeteroBench using LLMs')
     parser.add_argument('--provider', type=str, required=True, choices=['openai', 'google'],
-                      help='LLM provider to use (default: openai)')
+                      help='LLM provider to use')
     parser.add_argument('--model', type=str, required=True, help='Model name (provider-specific)')
-    parser.add_argument('--kernel', type=str, nargs='+', default=['gemm'],
-                      help='One or more kernels to process (default: gemm)')
+    parser.add_argument('--kernel', type=str, nargs='+', default=['optical_flow'],
+                      help='One or more benchmarks to process (default: optical_flow)')
     parser.add_argument('--all', action='store_true',
-                      help='Process all available kernels')
+                      help='Process all available benchmarks')
     args = parser.parse_args()
 
     # Create output directory first
@@ -159,20 +279,20 @@ def main():
         logging.info(f"Initialized {llm}")
         
         # Initialize the generator
-        generator = KernelCodeGenerator(llm)
+        generator = HeteroBenchCodeGenerator(llm)
 
         if args.all:
-            # Process all examples
-            logging.info(f"Processing all PolyBench examples using {args.model} by {args.provider.upper()}...")
-            process_kernels(generator, list(POLYBENCH_CODE_PATH.keys()), output_dir, args.model, args.provider)
+            # Process all benchmarks
+            logging.info(f"Processing all HeteroBench examples using {args.model} by {args.provider.upper()}...")
+            process_benchmarks(generator, list(HETEROBENCH_BENCHMARKS.keys()), output_dir, args.model, args.provider)
         else:
-            # Process specified kernels
-            process_kernels(generator, args.kernel, output_dir, args.model, args.provider)
+            # Process specified benchmarks
+            process_benchmarks(generator, args.kernel, output_dir, args.model, args.provider)
             
     except ValueError as e:
         logging.error(f"Error: {e}")
 
-    # then run the plot_speedup.py
+    # Generate the speedup plot
     plot_speedup(output_dir)
 
 if __name__ == "__main__":

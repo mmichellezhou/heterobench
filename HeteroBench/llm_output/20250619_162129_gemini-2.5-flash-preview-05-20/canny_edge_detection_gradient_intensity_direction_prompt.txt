@@ -1,0 +1,159 @@
+You are an expert in high-performance computing and kernel engineering on the CPU. You are familiar with different optimization techniques including vectorization, memory access optimization, tiling, unrolling, loop transformations, and SIMD instructions. Focus on single-threaded performance improvement. Don't use multi-threading nor vectorization.
+
+Given the following code:
+```cpp
+/*
+ * (C) Copyright [2024] Hewlett Packard Enterprise Development LP
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the Software),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included
+ * in all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+ 
+#include "cpu_impl.h"
+#include "omp.h"
+#include <cstring>
+#include <iostream>
+#include <math.h>
+
+using namespace std;
+
+void gradient_intensity_direction(const uint8_t *inImage, int height,
+                                  int width, double *intensity,
+                                  uint8_t *direction) {
+  const int8_t Gx[] = {-1, 0, 1, -2, 0, 2, -1, 0, 1};
+  const int8_t Gy[] = {1, 2, 1, 0, 0, 0, -1, -2, -1};
+  memset(intensity, 0.0, height*width);
+  memset(direction, 0, height*width);
+
+  for (int col = OFFSET; col < width - OFFSET; col++) {
+    for (int row = OFFSET; row < height - OFFSET; row++) {
+      double Gx_sum = 0.0;
+      double Gy_sum = 0.0;
+      int kIndex = 0;
+      int pxIndex = col + (row * width);
+
+      for (int krow = -OFFSET; krow <= OFFSET; krow++) {
+        for (int kcol = -OFFSET; kcol <= OFFSET; kcol++) {
+          Gx_sum += inImage[pxIndex + (kcol + (krow * width))] * Gx[kIndex];
+          Gy_sum += inImage[pxIndex + (kcol + (krow * width))] * Gy[kIndex];
+          kIndex++;
+        }
+      }
+
+      if (Gx_sum == 0.0 || Gy_sum == 0.0) {
+        intensity[pxIndex] = 0.0;
+        direction[pxIndex] = 0;
+      } else {
+        intensity[pxIndex] = std::sqrt((Gx_sum * Gx_sum) + (Gy_sum * Gy_sum));
+        double theta = std::atan2(Gy_sum, Gx_sum);
+        theta = theta * (360.0 / (2.0 * M_PI));
+
+        if ((theta <= 22.5 && theta >= -22.5) || (theta <= -157.5) || (theta >= 157.5))
+          direction[pxIndex] = 1;  // horizontal -
+        else if ((theta > 22.5 && theta <= 67.5) ||
+                 (theta > -157.5 && theta <= -112.5))
+          direction[pxIndex] = 2;  // north-east -> south-west /
+        else if ((theta > 67.5 && theta <= 112.5) ||
+                 (theta >= -112.5 && theta < -67.5))
+          direction[pxIndex] = 3;  // vertical |
+        else if ((theta >= -67.5 && theta < -22.5) ||
+                 (theta > 112.5 && theta < 157.5))
+          direction[pxIndex] = 4;  // north-west -> south-east \'
+      }
+    }
+  }
+}
+```
+
+with the following function to optimize: 
+```cpp
+void gradient_intensity_direction(const uint8_t *inImage, int height,
+                                  int width, double *intensity,
+                                  uint8_t *direction) {
+  const int8_t Gx[] = {-1, 0, 1, -2, 0, 2, -1, 0, 1};
+  const int8_t Gy[] = {1, 2, 1, 0, 0, 0, -1, -2, -1};
+  memset(intensity, 0.0, height*width);
+  memset(direction, 0, height*width);
+
+  for (int col = OFFSET; col < width - OFFSET; col++) {
+    for (int row = OFFSET; row < height - OFFSET; row++) {
+      double Gx_sum = 0.0;
+      double Gy_sum = 0.0;
+      int kIndex = 0;
+      int pxIndex = col + (row * width);
+
+      for (int krow = -OFFSET; krow <= OFFSET; krow++) {
+        for (int kcol = -OFFSET; kcol <= OFFSET; kcol++) {
+          Gx_sum += inImage[pxIndex + (kcol + (krow * width))] * Gx[kIndex];
+          Gy_sum += inImage[pxIndex + (kcol + (krow * width))] * Gy[kIndex];
+          kIndex++;
+        }
+      }
+
+      if (Gx_sum == 0.0 || Gy_sum == 0.0) {
+        intensity[pxIndex] = 0.0;
+        direction[pxIndex] = 0;
+      } else {
+        intensity[pxIndex] = std::sqrt((Gx_sum * Gx_sum) + (Gy_sum * Gy_sum));
+        double theta = std::atan2(Gy_sum, Gx_sum);
+        theta = theta * (360.0 / (2.0 * M_PI));
+
+        if ((theta <= 22.5 && theta >= -22.5) || (theta <= -157.5) || (theta >= 157.5))
+          direction[pxIndex] = 1;  // horizontal -
+        else if ((theta > 22.5 && theta <= 67.5) ||
+                 (theta > -157.5 && theta <= -112.5))
+          direction[pxIndex] = 2;  // north-east -> south-west /
+        else if ((theta > 67.5 && theta <= 112.5) ||
+                 (theta >= -112.5 && theta < -67.5))
+          direction[pxIndex] = 3;  // vertical |
+        else if ((theta >= -67.5 && theta < -22.5) ||
+                 (theta > 112.5 && theta < 157.5))
+          direction[pxIndex] = 4;  // north-west -> south-east \'
+      }
+    }
+  }
+}
+```
+
+Task: Analyze this function and generate an optimized implementation to get better performance while maintaining functional equivalence. Apply optimizations such as memory access optimization, tiling, unrolling, loop transformations, strength reduction, register optimization, and instruction-level parallelism.
+
+Machine we are using: 
+- Intel(R) Xeon(R) Gold 6248R CPU @ 3.00GHz
+- L1d cache: 1.5MB
+- L1i cache: 1.5MB
+- L2 cache: 48MB
+- L3 cache: 71.5MB
+- Supports SSE, AVX2, AVX512
+
+Requirements:
+1. Optimize the function for better single-threaded performance
+2. Maintain exact functional equivalence
+3. Use appropriate compiler intrinsics and optimizations
+4. Focus on the most impactful optimizations for this specific function
+5. Only use variables, constants, and types that are already available in the function scope
+6. Do not define any constants, macros, or types that would need to be defined outside the function body
+
+Output format:
+You should only output the optimized function implementation which follows the exact function signature as follows: 
+```cpp
+void gradient_intensity_direction_optimized(const uint8_t *inImage, int height,
+                                            int width, double *intensity,
+                                            uint8_t *direction)
+```
+
+Do not include any other text other than the optimized function implementation. ONLY output the optimized function implementation within the code block.

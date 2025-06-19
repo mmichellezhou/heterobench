@@ -1,0 +1,20 @@
+BUILD COMMAND: make run_simple
+STDOUT:
+clang++ -Wall -Wextra -pedantic -std=c++11 -fopenmp -w -DITERATIONS=1 -Icpu_impl/include -Icpu_impl_optimized/include -I. -c cpu_impl_optimized/gaussian_filter_optimized.cpp -o cpu_impl_optimized/gaussian_filter_optimized.o
+
+STDERR:
+cpu_impl_optimized/gaussian_filter_optimized.cpp:13:3: error: use of undeclared identifier 'memset'; did you mean 'wmemset'?
+  memset(outImage, 0, height * width);
+  ^~~~~~
+  wmemset
+/usr/include/wchar.h:271:17: note: 'wmemset' declared here
+extern wchar_t *wmemset (wchar_t *__s, wchar_t __c, size_t __n) __THROW;
+                ^
+cpu_impl_optimized/gaussian_filter_optimized.cpp:13:10: error: cannot initialize a parameter of type 'wchar_t *' with an lvalue of type 'uint8_t *' (aka 'unsigned char *')
+  memset(outImage, 0, height * width);
+         ^~~~~~~~
+/usr/include/wchar.h:271:35: note: passing argument to parameter '__s' here
+extern wchar_t *wmemset (wchar_t *__s, wchar_t __c, size_t __n) __THROW;
+                                  ^
+2 errors generated.
+make: *** [Makefile:69: cpu_impl_optimized/gaussian_filter_optimized.o] Error 1

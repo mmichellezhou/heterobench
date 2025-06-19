@@ -1,0 +1,29 @@
+{
+  "3_matrix_multiplication": {
+    "function_results": {
+      "kernel_3mm_0": {
+        "function_generation_success": true
+      },
+      "kernel_3mm_1": {
+        "function_generation_success": true
+      },
+      "kernel_3mm_2": {
+        "function_generation_success": true
+      }
+    },
+    "performance_analysis": {
+      "verification_success": false,
+      "original_time": 15.4334,
+      "optimized_time": 7.33607,
+      "speedup": 2.10377,
+      "build_success": true
+    },
+    "overall_status": {
+      "functions_processed": 3,
+      "functions_successful": 3,
+      "build_success": true,
+      "verification_success": false
+    },
+    "speedup": 2.10377
+  }
+}

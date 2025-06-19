@@ -1,6 +1,82 @@
 #include "cpu_impl.h"
 
+#include <immintrin.h> // For AVX512 intrinsics
+
+// N is a compile-time constant, assumed to be defined in cpu_impl.h or globally.
+// For example: #define N 2048
+
 void init_array_optimized(int n,double X[N + 0][N + 0],double A[N + 0][N + 0],double B[N + 0][N + 0])
 {
-    init_array(n, X, A, B);
+  // The original code included an 'if (n >= 1)' check.
+  // If n is less than 1, no operations should be performed, maintaining functional equivalence.
+  if (n < 1) {
+    return;
+  }
+
+  // Precompute 1.0 / n to replace repeated divisions with a single multiplication
+  // inside the inner loop. This is a form of strength reduction.
+  const double inv_n = 1.0 / n;
+
+  // Loop over rows (c1)
+  for (int c1 = 0; c1 < n; ++c1) {
+    // Convert c1 to double once per outer loop iteration.
+    const double c1_double = static_cast<double>(c1);
+
+    // Precompute constant terms for the inner loop.
+    // The original expression is (c1_double * (c2 + K) + C) * inv_n.
+    // This can be rewritten as (c1_double * c2 * inv_n) + ((c1_double * K + C) * inv_n).
+    // The first part (c1_double * c2 * inv_n) varies with c2.
+    // The second part ((c1_double * K + C) * inv_n) is constant for a given c1.
+    const double term_c1_inv_n = c1_double * inv_n; // This is the 'slope' for the linear progression with c2
+
+    // These are the 'y-intercepts' for each array's calculation, effectively:
+    // (c1_double * K_val + C_val) * inv_n
+    const double add_X = (c1_double * 1.0 + 1.0) * inv_n;
+    const double add_A = (c1_double * 2.0 + 2.0) * inv_n;
+    const double add_B = (c1_double * 3.0 + 3.0) * inv_n;
+
+    // Loop over columns (c2) with unrolling to reduce loop overhead and expose
+    // more instruction-level parallelism (ILP).
+    // Further strength reduction is applied to the c2-dependent multiplication.
+    int c2;
+    const int n_unrolled_limit = n - 4; // Process elements in blocks of 4
+
+    for (c2 = 0; c2 <= n_unrolled_limit; c2 += 4) {
+      // Calculate the base term (term_c1_inv_n * c2) for the current block of 4 elements.
+      // Subsequent terms in the block are derived using additions (strength reduction)
+      // instead of multiplications, as they form an arithmetic progression.
+      double current_term_c2_0 = term_c1_inv_n * static_cast<double>(c2);
+      double current_term_c2_1 = current_term_c2_0 + term_c1_inv_n;
+      double current_term_c2_2 = current_term_c2_1 + term_c1_inv_n;
+      double current_term_c2_3 = current_term_c2_2 + term_c1_inv_n;
+
+      // Store results for c2
+      X[c1][c2] = current_term_c2_0 + add_X;
+      A[c1][c2] = current_term_c2_0 + add_A;
+      B[c1][c2] = current_term_c2_0 + add_B;
+
+      // Store results for c2 + 1
+      X[c1][c2 + 1] = current_term_c2_1 + add_X;
+      A[c1][c2 + 1] = current_term_c2_1 + add_A;
+      B[c1][c2 + 1] = current_term_c2_1 + add_B;
+
+      // Store results for c2 + 2
+      X[c1][c2 + 2] = current_term_c2_2 + add_X;
+      A[c1][c2 + 2] = current_term_c2_2 + add_A;
+      B[c1][c2 + 2] = current_term_c2_2 + add_B;
+
+      // Store results for c2 + 3
+      X[c1][c2 + 3] = current_term_c2_3 + add_X;
+      A[c1][c2 + 3] = current_term_c2_3 + add_A;
+      B[c1][c2 + 3] = current_term_c2_3 + add_B;
+    }
+
+    // Handle remaining elements (if n is not a multiple of the unroll factor)
+    for (; c2 < n; ++c2) {
+      double current_term_c2 = term_c1_inv_n * static_cast<double>(c2);
+      X[c1][c2] = current_term_c2 + add_X;
+      A[c1][c2] = current_term_c2 + add_A;
+      B[c1][c2] = current_term_c2 + add_B;
+    }
+  }
 }

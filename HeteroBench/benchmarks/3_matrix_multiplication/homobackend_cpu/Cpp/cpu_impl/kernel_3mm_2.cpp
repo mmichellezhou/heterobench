@@ -24,7 +24,7 @@
 
 using namespace std;
 
-void kernel_3m_2(double E[NI + 0][NJ + 0], double F[NJ + 0][NL + 0], double G[NI + 0][NL + 0])
+void kernel_3mm_2(double E[NI + 0][NJ + 0], double F[NJ + 0][NL + 0], double G[NI + 0][NL + 0])
 {
   int c1;
   int c2;

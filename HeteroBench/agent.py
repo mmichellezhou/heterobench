@@ -6,46 +6,47 @@ import logging
 from llm import LLM
 
 
-class KernelCodeGenerator:
+class HeteroBenchCodeGenerator:
     """
-    A framework for using LLMs to generate optimized kernel code using Intel MKL library.
+    A framework for using LLMs to generate optimized kernel code for HeteroBench.
+    Processes multiple files in cpu_impl and optimizes individual functions.
     """
     
     def __init__(self, llm: LLM):
         """
-        Initialize the kernel code generator.
+        Initialize the HeteroBench code generator.
         
         Args:
             llm: LLM instance configured with provider and model
         """
         self.llm = llm
         
-    def create_prompt(self, complete_code: str, kernel_func_code: str, optimized_func_signature: str, kernel_name: str) -> str:
+    def create_prompt(self, complete_code: str, function_code: str, optimized_func_signature: str, function_name: str) -> str:
         """
-        Create a prompt for the LLM to analyze and optimize kernel using MKL.
+        Create a prompt for the LLM to analyze and optimize a specific function.
         
         Args:
-            complete_code: The original complete code
-            kernel_func_code: The original kernel code
-            optimized_func_signature: The optimized signature
-            kernel_name: Name of the kernel (e.g., gemm, syrk)
+            complete_code: The original complete code from the file
+            function_code: The original function code to optimize
+            optimized_func_signature: The optimized function signature
+            function_name: Name of the function to optimize
             
         Returns:
             Formatted prompt string
         """
-        prompt = f"""You are an expert in high-performance computing and kernel engineering on the CPU. You are familiar with different optimized libraries and their performance characteristics, including Intel MKL. You also know the performance improvement techniques, including vectorization, memory access optimization, tiling, unrolling, etc. Here we focus on the single-threaded performance improvement. Don't use multi-threading. 
+        prompt = f"""You are an expert in high-performance computing and kernel engineering on the CPU. You are familiar with different optimization techniques including vectorization, memory access optimization, tiling, unrolling, loop transformations, and SIMD instructions. Focus on single-threaded performance improvement. Don't use multi-threading nor vectorization.
 
-Given the following code `{kernel_name}.c`:
-```c
+Given the following code:
+```cpp
 {complete_code}
 ```
 
-with the following kernel implementation: 
-```c
-{kernel_func_code}
+with the following function to optimize: 
+```cpp
+{function_code}
 ```
 
-Task: Analyze this kernel and generate an optimized kernel implementation to get better performance while maintaining functional equivalence. You should first consider if the kernel can be implemented using a single corresponding MKL function. If not, consider if the kernel can be decomposed into multiple MKL calls. If there is no way to implement the kernel using MKL, or you think MKL cannot get good performance, then consider applying optimizations directly to the kernel, such as vectorization, memory access optimization, tiling, unrolling, etc. You should only use single thread for the optimized kernel implementation. 
+Task: Analyze this function and generate an optimized implementation to get better performance while maintaining functional equivalence. Apply optimizations such as memory access optimization, tiling, unrolling, loop transformations, strength reduction, register optimization, and instruction-level parallelism.
 
 Machine we are using: 
 - Intel(R) Xeon(R) Gold 6248R CPU @ 3.00GHz
@@ -56,21 +57,20 @@ Machine we are using:
 - Supports SSE, AVX2, AVX512
 
 Requirements:
-1. Identify which a single MKL function or a combination of MKL functions can replace this kernel to get better performance.
-2. Provide the equivalent MKL implementation. 
-3. Include necessary headers and initialization code. 
-4. Ensure functional equivalence.
-5. If there is no available MKL function that can get good performance, then consider applying optimizations directly to the kernel, such as vectorization, memory access optimization, tiling, unrolling, etc.
-6. If neither MKL nor optimizations can get good performance, then just fallback to the default implementation.
+1. Optimize the function for better single-threaded performance
+2. Maintain exact functional equivalence
+3. Use appropriate compiler intrinsics and optimizations
+4. Focus on the most impactful optimizations for this specific function
+5. Only use variables, constants, and types that are already available in the function scope
+6. Do not define any constants, macros, or types that would need to be defined outside the function body
 
 Output format:
-You should only output the optimized kernel implementation which follows the exact function signature as follows: 
-```c
+You should only output the optimized function implementation which follows the exact function signature as follows: 
+```cpp
 {optimized_func_signature}
 ```
 
-Do not include any other text other than the optimized kernel implementation. ONLY output the optimized kernel implementation within the code block. 
-
+Do not include any other text other than the optimized function implementation. ONLY output the optimized function implementation within the code block.
 """
         return prompt
     
@@ -84,7 +84,7 @@ Do not include any other text other than the optimized kernel implementation. ON
         Returns:
             Tuple of (The LLM's response text, entire response dictionary)
         """
-        system_prompt = "You are an expert in high-performance computing, kernel optimization, and Intel MKL library."
+        system_prompt = "You are an expert in high-performance computing, kernel optimization, and CPU performance tuning."
         return self.llm.generate_completion(system_prompt, prompt)
     
     def _extract_code_blocks(self, response: str) -> List[str]:
@@ -104,74 +104,18 @@ Do not include any other text other than the optimized kernel implementation. ON
         matches = re.findall(pattern, response, re.DOTALL)
         return [match.strip() for match in matches]
     
-    def _extract_function_signature_from_code(self, complete_code: str, function_name: str) -> str:
-        """
-        Extract just the function signature (declaration) from C code.
-        
-        Args:
-            complete_code: The complete C source code
-            function_name: Name of the function to extract signature for
-            
-        Returns:
-            The function signature as a string (up to the opening brace)
-        """
-        # Split code into lines for easier processing
-        lines = complete_code.split('\n')
-        
-        # Find the line containing the function name
-        function_start_line = -1
-        for i, line in enumerate(lines):
-            if function_name in line and '(' in line:
-                function_start_line = i
-                break
-        
-        if function_start_line == -1:
-            return ""
-        
-        # Look backwards to find the return type
-        signature_start_line = function_start_line
-        for i in range(function_start_line, -1, -1):
-            line_stripped = lines[i].strip()
-            if (line_stripped.startswith('void') or 
-                line_stripped.startswith('int') or
-                line_stripped.startswith('double') or
-                line_stripped.startswith('float') or
-                line_stripped.startswith('char') or
-                line_stripped.startswith('static')):
-                signature_start_line = i
-                break
-        
-        # Extract lines from return type to the opening brace
-        signature_lines = []
-        for i in range(signature_start_line, len(lines)):
-            line = lines[i]
-            signature_lines.append(line)
-            
-            # Stop when we reach the opening brace
-            if '{' in line:
-                # Remove the opening brace and everything after it
-                brace_pos = line.find('{')
-                last_line = line[:brace_pos].rstrip()
-                signature_lines[-1] = last_line
-                break
-        
-        # Join the lines and clean up
-        signature = '\n'.join(signature_lines).strip()
-        return signature
-
     def _extract_function_from_code(self, complete_code: str, function_name: str) -> str:
         """
-        Extract a specific function implementation from C code.
+        Extract a specific function implementation from C++ code.
         
         Args:
-            complete_code: The complete C source code
-            function_name: Name of the function to extract (e.g., 'kernel_gemm')
+            complete_code: The complete C++ source code
+            function_name: Name of the function to extract
             
         Returns:
             The function implementation as a string
         """
         # Pattern to match function definition and its body
-        # This handles multi-line function signatures and nested braces
         pattern = rf'({function_name}\s*\([^{{]*\{{\s*.*?\n}})'
         
         # Search for the function with DOTALL flag to match across newlines
@@ -197,7 +141,9 @@ Do not include any other text other than the optimized kernel implementation. ON
                                          lines[j].strip().startswith('double') or
                                          lines[j].strip().startswith('float') or
                                          lines[j].strip().startswith('char') or
-                                         lines[j].strip().startswith('static')):
+                                         lines[j].strip().startswith('static') or
+                                         lines[j].strip().startswith('template') or
+                                         lines[j].strip().startswith('inline')):
                         j -= 1
                     if j >= 0:
                         function_start_line = j
@@ -228,17 +174,74 @@ Do not include any other text other than the optimized kernel implementation. ON
         
         return ""
 
-    def _replace_function_in_code(self, complete_code: str, function_name: str, new_implementation: str) -> str:
+    def _extract_function_body(self, function_code: str) -> str:
         """
-        Replace a function implementation in the complete code with a new implementation.
+        Extract just the function body (between braces) from a function.
         
         Args:
-            complete_code: The complete C source code
-            function_name: Name of the function to replace
-            new_implementation: The new function implementation
+            function_code: The complete function code
             
         Returns:
-            The updated complete code with replaced function
+            The function body as a string
+        """
+        # Find the first opening brace
+        start = function_code.find('{')
+        if start == -1:
+            return ""
+        
+        # Count braces to find the matching closing brace
+        open_braces = 0
+        for i, char in enumerate(function_code[start:], start):
+            if char == '{':
+                open_braces += 1
+            elif char == '}':
+                open_braces -= 1
+                if open_braces == 0:
+                    # Return everything between the braces (excluding the braces themselves)
+                    return function_code[start + 1:i].strip()
+        
+        return ""
+
+    def _extract_function_body_from_response(self, response_code: str) -> str:
+        """
+        Extract just the function body from LLM response, handling cases where
+        the LLM returns a complete function instead of just the body.
+        
+        Args:
+            response_code: The code returned by the LLM
+            
+        Returns:
+            The function body as a string (code between braces)
+        """
+        # First try to extract function body using the same method as for functions
+        body = self._extract_function_body(response_code)
+        if body:
+            return body
+        
+        # If that fails, the response might already be just the function body
+        # Check if it starts with a brace or looks like function body code
+        lines = response_code.strip().split('\n')
+        
+        # If the first line doesn't contain function signature patterns, 
+        # assume it's already just the function body
+        first_line = lines[0].strip()
+        if not any(keyword in first_line for keyword in ['void', 'int', 'double', 'float', 'char', 'static', 'template', 'inline']):
+            return response_code.strip()
+        
+        # If we still can't extract, return the original response
+        return response_code.strip()
+
+    def _replace_function_body_in_complete_code(self, complete_code: str, function_name: str, new_body: str) -> str:
+        """
+        Replace the function body of a specific function in the complete code.
+        
+        Args:
+            complete_code: The complete source code
+            function_name: Name of the function to replace body for
+            new_body: The new function body (code between braces)
+            
+        Returns:
+            The complete code with the function body replaced
         """
         lines = complete_code.split('\n')
         
@@ -257,7 +260,9 @@ Do not include any other text other than the optimized kernel implementation. ON
                         line_stripped.startswith('double') or
                         line_stripped.startswith('float') or
                         line_stripped.startswith('char') or
-                        line_stripped.startswith('static')):
+                        line_stripped.startswith('static') or
+                        line_stripped.startswith('template') or
+                        line_stripped.startswith('inline')):
                         function_start_line = j
                         break
                 break
@@ -268,6 +273,8 @@ Do not include any other text other than the optimized kernel implementation. ON
         # Find the end of the function by counting braces
         open_braces = 0
         found_opening_brace = False
+        body_start_line = -1
+        body_end_line = -1
         
         for i in range(function_start_line, len(lines)):
             line = lines[i]
@@ -277,34 +284,82 @@ Do not include any other text other than the optimized kernel implementation. ON
                 if char == '{':
                     open_braces += 1
                     found_opening_brace = True
+                    if body_start_line == -1:
+                        body_start_line = i
                 elif char == '}':
                     open_braces -= 1
+                    if found_opening_brace and open_braces == 0:
+                        body_end_line = i
+                        break
             
             # If we found the opening brace and braces are balanced, we found the end
             if found_opening_brace and open_braces == 0:
                 function_end_line = i
                 break
         
-        if function_end_line == -1:
+        if function_end_line == -1 or body_start_line == -1:
             return complete_code  # Could not find function end, return original
         
-        # Replace the function
-        new_lines = (lines[:function_start_line] + 
-                    [new_implementation] + 
-                    lines[function_end_line + 1:])
+        # Replace only the function body (between the braces)
+        # Keep the opening brace line but replace its content
+        opening_brace_line = lines[body_start_line]
+        closing_brace_line = lines[body_end_line]
+        
+        # Find the position of the opening brace in the line
+        brace_pos = opening_brace_line.find('{')
+        if brace_pos != -1:
+            # Keep everything before the brace, add the new body, then the closing brace
+            new_lines = (lines[:body_start_line] + 
+                        [opening_brace_line[:brace_pos + 1]] +
+                        [new_body] +
+                        [closing_brace_line] +
+                        lines[body_end_line + 1:])
+        else:
+            # Fallback: replace the entire body lines
+            new_lines = (lines[:body_start_line] + 
+                        [new_body] + 
+                        lines[body_end_line + 1:])
         
         return '\n'.join(new_lines)
 
-
-
-    def generate_kernel(self, file_path: str, kernel_name: str, output_dir: str) -> Dict:
+    def _replace_function_body(self, original_function: str, new_body: str) -> str:
         """
-        Generate an optimized kernel implementation through the LLM pipeline by reading from a file.
+        Replace the function body in a function with a new body.
         
         Args:
-            file_path: Path to the C source file
-            kernel_name: Name of the kernel. The function name in the code is `kernel_{kernel_name}`
-            output_dir: Directory to save outputs
+            original_function: The original function code
+            new_body: The new function body
+            
+        Returns:
+            The function with replaced body
+        """
+        # Find the first opening brace
+        start = original_function.find('{')
+        if start == -1:
+            return original_function
+        
+        # Find the matching closing brace
+        open_braces = 0
+        for i, char in enumerate(original_function[start:], start):
+            if char == '{':
+                open_braces += 1
+            elif char == '}':
+                open_braces -= 1
+                if open_braces == 0:
+                    # Replace the body
+                    return original_function[:start + 1] + '\n' + new_body + '\n' + original_function[i:]
+        
+        return original_function
+
+    def generate_optimized_function(self, file_path: str, function_name: str, benchmark_name: str) -> Dict:
+        """
+        Generate an optimized function implementation through the LLM pipeline.
+        
+        Args:
+            file_path: Path to the C++ source file in cpu_impl
+            function_name: Name of the function to optimize (same as filename without extension)
+            benchmark_name: Name of the benchmark
+            
         Returns:
             Dictionary containing the results
         """
@@ -318,25 +373,35 @@ Do not include any other text other than the optimized kernel implementation. ON
         except Exception as e:
             raise Exception(f"Error reading file {file_path}: {str(e)}")
         
-        # kernel name: `-` -> `_`
-        kernel_name = kernel_name.replace('-', '_')
-
-        # Extract the kernel function implementation
-        kernel_func_name = f"kernel_{kernel_name}"
-        kernel_func_code = self._extract_function_from_code(complete_code, kernel_func_name)
+        # Extract the function implementation
+        function_code = self._extract_function_from_code(complete_code, function_name)
         
-        if not kernel_func_code:
-            raise ValueError(f"Could not find function '{kernel_func_name}' in {file_path}")
+        if not function_code:
+            raise ValueError(f"Could not find function '{function_name}' in {file_path}")
+        
+        # Get the optimized file path
+        original_dir = os.path.dirname(file_path)
+        optimized_dir = os.path.join(os.path.dirname(original_dir), "cpu_impl_optimized")
+        optimized_file_path = os.path.join(optimized_dir, f"{function_name}_optimized.cpp")
+        
+        # Read the existing optimized file
+        try:
+            with open(optimized_file_path, 'r') as f:
+                optimized_file_content = f.read()
+        except FileNotFoundError:
+            raise FileNotFoundError(f"Could not find optimized file: {optimized_file_path}")
+        except Exception as e:
+            raise Exception(f"Error reading optimized file {optimized_file_path}: {str(e)}")
         
         # Extract the optimized function signature
-        optimized_func_name = f"kernel_{kernel_name}_optimized"
-        optimized_func_signature = self._extract_function_signature_from_code(complete_code, optimized_func_name)
+        optimized_function_name = f"{function_name}_optimized"
+        optimized_func_signature = self._extract_function_signature_from_code(optimized_file_content, optimized_function_name)
 
         if not optimized_func_signature:
-            raise ValueError(f"Could not find function '{optimized_func_name}' in {file_path}")
+            raise ValueError(f"Could not find function '{optimized_function_name}' in {optimized_file_path}")
         
         # Create prompt
-        prompt = self.create_prompt(complete_code, kernel_func_code, optimized_func_signature, kernel_name)
+        prompt = self.create_prompt(complete_code, function_code, optimized_func_signature, function_name)
 
         # Call LLM
         response, entire_response = self.call_llm(prompt)
@@ -344,27 +409,27 @@ Do not include any other text other than the optimized kernel implementation. ON
         # Extract code blocks
         code_blocks = self._extract_code_blocks(response)
         
-        # Find the main MKL implementation (usually the longest code block)
+        # Find the main implementation (usually the longest code block)
         optimized_code_generated = None
-        kernel_generation_success = False
+        function_generation_success = False
         if response and code_blocks:
             optimized_code_generated = max(code_blocks, key=len)
-            kernel_generation_success = True
+            function_generation_success = True
         
         # Generate optimized complete code by replacing the optimized function
-        optimized_complete_code = complete_code
+        optimized_complete_code = optimized_file_content
         if optimized_code_generated:
             optimized_complete_code = self._replace_function_in_code(
-                complete_code, optimized_func_name, optimized_code_generated
+                optimized_file_content, optimized_function_name, optimized_code_generated
             )
         
-        # save the optimized complete code
-        optimized_file_path = os.path.join(output_dir, f"{kernel_name}_optimized.c")
+        # Save the updated optimized file
+        os.makedirs(optimized_dir, exist_ok=True)
         with open(optimized_file_path, 'w') as f:
             f.write(optimized_complete_code)
         
         return {
-            "kernel_name": kernel_name,
+            "function_name": function_name,
             "original_file_path": file_path,
             "prompt": prompt,
             "llm_response": response,
@@ -373,26 +438,26 @@ Do not include any other text other than the optimized kernel implementation. ON
             "num_code_blocks": len(code_blocks),
             "optimized_complete_code": optimized_complete_code,
             "optimized_file_path": optimized_file_path,
-            "kernel_generation_success": kernel_generation_success
+            "function_generation_success": function_generation_success
         }
     
-    
-    def save_results(self, results: Dict, output_dir: str):
+    def save_results(self, results: Dict, output_dir: str, benchmark_name: str):
         """
         Save results including all status information.
         
         Args:
             results: The complete results dictionary
             output_dir: Directory to save outputs
+            benchmark_name: Name of the benchmark
         """
-        kernel_name = results['kernel_name']
+        function_name = results['function_name']
         
         # Save the prompt
-        with open(os.path.join(output_dir, f"{kernel_name}_prompt.txt"), 'w') as f:
+        with open(os.path.join(output_dir, f"{benchmark_name}_{function_name}_prompt.txt"), 'w') as f:
             f.write(results['prompt'])
         
         # Save full LLM response
-        with open(os.path.join(output_dir, f"{kernel_name}_llm_response.txt"), 'w') as f:
+        with open(os.path.join(output_dir, f"{benchmark_name}_{function_name}_llm_response.txt"), 'w') as f:
             f.write(results['llm_response'] if results['llm_response'] is not None else "")
         
         # Save compilation and execution logs
@@ -400,7 +465,7 @@ Do not include any other text other than the optimized kernel implementation. ON
             comp_results = results['compile_and_run']
             
             # Save compilation output
-            with open(os.path.join(output_dir, f"{kernel_name}_compile_output.txt"), 'w') as f:
+            with open(os.path.join(output_dir, f"{benchmark_name}_{function_name}_compile_output.txt"), 'w') as f:
                 f.write("COMPILATION COMMAND:\n")
                 f.write(comp_results.get('compile_cmd', ''))
                 f.write("\n\nSTDOUT:\n")
@@ -409,7 +474,7 @@ Do not include any other text other than the optimized kernel implementation. ON
                 f.write(comp_results.get('compile_error', ''))
             
             # Save execution output
-            with open(os.path.join(output_dir, f"{kernel_name}_execution_output.txt"), 'w') as f:
+            with open(os.path.join(output_dir, f"{benchmark_name}_{function_name}_execution_output.txt"), 'w') as f:
                 f.write("EXECUTION COMMAND:\n")
                 f.write(comp_results.get('executable', ''))
                 f.write("\n\nSTDOUT:\n")
@@ -419,11 +484,11 @@ Do not include any other text other than the optimized kernel implementation. ON
         
         # Save summary
         summary = {
-            "kernel_name": kernel_name,
+            "function_name": function_name,
             "original_file_path": results.get('original_file_path', ''),
             "optimized_file_path": results.get('optimized_file_path', ''),
             "status": {
-                "kernel_generation_success": results.get('kernel_generation_success', False),
+                "function_generation_success": results.get('function_generation_success', False),
                 "compilation_success": results.get('compilation_success', False),
                 "execution_success": results.get('execution_success', False),
                 "verification_success": results.get('verification_success', False)
@@ -462,18 +527,23 @@ Do not include any other text other than the optimized kernel implementation. ON
                 "run_error_length": len(comp_results.get('run_error', ''))
             }
         
-        with open(os.path.join(output_dir, f"{kernel_name}_summary.json"), 'w') as f:
+        with open(os.path.join(output_dir, f"{benchmark_name}_{function_name}_summary.json"), 'w') as f:
             json.dump(summary, f, indent=2)
         
         # Print status summary
         logging.info("\n" + "="*60)
         logging.info("RESULTS SUMMARY")
         logging.info("="*60)
-        logging.info(f"Kernel: {kernel_name}")
-        logging.info(f"Kernel Generation Success: {'✓' if summary['status']['kernel_generation_success'] else '✗'}")
-        logging.info(f"Compilation Success: {'✓' if summary['status']['compilation_success'] else '✗'}")
-        logging.info(f"Execution Success: {'✓' if summary['status']['execution_success'] else '✗'}")
-        logging.info(f"Verification Success: {'✓' if summary['status']['verification_success'] else '✗'}")
+        logging.info(f"Function: {function_name}")
+        logging.info(f"Function Generation Success: {'✓' if summary['status']['function_generation_success'] else '✗'}")
+        
+        # Only show compilation/execution status if they were actually set
+        if 'compilation_success' in results:
+            logging.info(f"Compilation Success: {'✓' if summary['status']['compilation_success'] else '✗'}")
+        if 'execution_success' in results:
+            logging.info(f"Execution Success: {'✓' if summary['status']['execution_success'] else '✗'}")
+        if 'verification_success' in results:
+            logging.info(f"Verification Success: {'✓' if summary['status']['verification_success'] else '✗'}")
         
         # Print performance summary if available
         if 'performance_analysis' in summary:
@@ -483,77 +553,6 @@ Do not include any other text other than the optimized kernel implementation. ON
         
         logging.info(f"Files saved in: {output_dir}")
         logging.info("="*60)
-
-    def compile_and_run(self, results: Dict, output_dir: str) -> Dict:
-        """
-        Compile and run the optimized code.
-        
-        Args:
-            results: The results dictionary containing optimized code
-            output_dir: Directory where files are saved
-            
-        Returns:
-            Dictionary with compilation and execution results
-        """
-        import subprocess
-        
-        if not results.get('optimized_complete_code'):
-            return {"error": "No optimized code to compile"}
-        
-        # Get the optimized file path
-        optimized_file_path = results.get('optimized_file_path')
-        if not optimized_file_path:
-            optimized_file_path = os.path.join(output_dir, f"{results['kernel_name']}_optimized.c")
-        
-        # Executable path
-        executable_path = os.path.join(output_dir, f"{results['kernel_name']}_optimized")
-        
-        compile_results = {
-            "source_file": optimized_file_path,
-            "executable": executable_path,
-            "compilation_successful": False,
-            "execution_successful": False,
-            "compile_output": "",
-            "compile_error": "",
-            "run_output": "",
-            "run_error": ""
-        }
-        
-        try:
-            # Compile the code
-            compile_cmd = ["gcc", "-o", executable_path, optimized_file_path, "-I", "${MKL_ROOT}/include", "-L", "${MKL_ROOT}/lib/intel64", "-lmkl_intel_lp64", "-lmkl_sequential", "-lmkl_core", "-lpthread", "-lm", "-march=native"]
-            
-            compile_process = subprocess.run(
-                compile_cmd,
-                capture_output=True,
-                text=True,
-                timeout=60
-            )
-            
-            compile_results["compile_cmd"] = " ".join(compile_cmd)
-            compile_results["compile_output"] = compile_process.stdout
-            compile_results["compile_error"] = compile_process.stderr
-            compile_results["compilation_successful"] = compile_process.returncode == 0
-            
-            if compile_results["compilation_successful"]:
-                # Run the executable
-                run_process = subprocess.run(
-                    [executable_path],
-                    capture_output=True,
-                    text=True,
-                    timeout=300
-                )
-                
-                compile_results["run_output"] = run_process.stdout
-                compile_results["run_error"] = run_process.stderr
-                compile_results["execution_successful"] = run_process.returncode == 0
-                
-        except subprocess.TimeoutExpired:
-            compile_results["compile_error"] = "Compilation or execution timeout"
-        except Exception as e:
-            compile_results["compile_error"] = f"Error during compilation/execution: {str(e)}"
-        
-        return compile_results
 
     def _analyze_run_output(self, run_output: str) -> Dict:
         """
@@ -578,136 +577,222 @@ Do not include any other text other than the optimized kernel implementation. ON
             line = line.strip()
             
             # Look for verification results
-            if "Verification Results:" in line:
-                # Check next few lines for PASS/FAIL
-                for j in range(i+1, min(i+5, len(lines))):
-                    next_line = lines[j].strip()
-                    if "PASS:" in next_line:
-                        analysis["verification_success"] = True
-                        break
-                    elif "FAIL:" in next_line:
-                        analysis["verification_success"] = False
-                        break
+            if "Results:" in line and "Pass" in line:
+                analysis["verification_success"] = True
+            elif "Results:" in line and "Fail" in line:
+                analysis["verification_success"] = False
             
             # Look for performance results
-            elif "Performance Results:" in line:
-                # Look for timing information in next few lines
+            elif "Speedup:" in line:
+                try:
+                    # Extract speedup value (format: "Speedup: X.XXXXXX")
+                    speedup_str = line.split(":")[-1].strip()
+                    analysis["speedup"] = float(speedup_str)
+                except (ValueError, IndexError):
+                    pass
+            
+            # Look for timing information
+            elif "Original Implementation:" in line:
+                # Look for timing in next few lines
                 for j in range(i+1, min(i+10, len(lines))):
                     next_line = lines[j].strip()
-                    
-                    # Extract original kernel time
-                    if "Original kernel average time:" in next_line:
+                    if "Single iteration time:" in next_line:
                         try:
-                            # Extract time value (format: "Original kernel average time: X.XXXXXX seconds")
                             time_str = next_line.split(":")[-1].replace("seconds", "").strip()
                             analysis["original_time"] = float(time_str)
                         except (ValueError, IndexError):
                             pass
-                    
-                    # Extract optimized kernel time
-                    elif "Optimized kernel average time:" in next_line:
+                        break
+            
+            elif "Optimized Implementation:" in line:
+                # Look for timing in next few lines
+                for j in range(i+1, min(i+10, len(lines))):
+                    next_line = lines[j].strip()
+                    if "Single iteration time:" in next_line:
                         try:
-                            # Extract time value (format: "Optimized kernel average time: X.XXXXXX seconds")
                             time_str = next_line.split(":")[-1].replace("seconds", "").strip()
                             analysis["optimized_time"] = float(time_str)
                         except (ValueError, IndexError):
                             pass
-                    
-                    # Extract speedup
-                    elif "Speedup:" in next_line:
-                        try:
-                            # Extract speedup value (format: "Speedup: X.XXXXXX")
-                            speedup_str = next_line.split(":")[-1].strip()
-                            analysis["speedup"] = float(speedup_str)
-                        except (ValueError, IndexError):
-                            pass
+                        break
         
         return analysis
 
-    def process_kernel(self, file_path: str, kernel_name: str, output_dir: str) -> Dict:
+    def process_benchmark(self, benchmark_name: str, benchmark_path: str, output_dir: str) -> Dict:
         """
-        Complete workflow: process kernel, save results, compile and run optimized code.
+        Process all functions in a benchmark's cpu_impl directory.
         
         Args:
-            file_path: Path to the C source file
-            kernel_name: Name of the kernel
+            benchmark_name: Name of the benchmark
+            benchmark_path: Path to the benchmark directory
             output_dir: Directory to save outputs
             
         Returns:
-            Dictionary containing all results including compilation and execution
+            Dictionary containing results for all processed functions
         """
-        logging.info(f"Processing kernel '{kernel_name}' from file: {file_path}")
+        cpu_impl_path = os.path.join(benchmark_path, "homobackend_cpu", "Cpp", "cpu_impl")
         
-        # Initialize status tracking
-        compilation_success = False
-        execution_success = False
-        verification_success = False
+        if not os.path.exists(cpu_impl_path):
+            raise FileNotFoundError(f"CPU implementation directory not found: {cpu_impl_path}")
         
-        # Process the kernel
-        results = self.generate_kernel(file_path, kernel_name, output_dir)
-        if not results.get('kernel_generation_success', False):
-            logging.warning("✗ Kernel generation failed. Skipping compilation and execution.")
-            results.update({
-                "compilation_success": False,
-                "execution_success": False,
-                "verification_success": False,
-            })
-            self.save_results(results, output_dir)
-            return results
-        logging.info(f"✓ Kernel generation completed")
+        # Get all .cpp files in cpu_impl
+        cpp_files = [f for f in os.listdir(cpu_impl_path) if f.endswith('.cpp')]
         
-        # Compile and run if we have optimized code
-        if results.get('optimized_complete_code'):
-            compile_results = self.compile_and_run(results, output_dir)
-            results['compile_and_run'] = compile_results
+        all_results = {}
+        
+        for cpp_file in cpp_files:
+            function_name = os.path.splitext(cpp_file)[0]  # Remove .cpp extension
+            file_path = os.path.join(cpu_impl_path, cpp_file)
             
-            compilation_success = compile_results['compilation_successful']
-            execution_success = compile_results['execution_successful']
+            logging.info(f"Processing function '{function_name}' from file: {file_path}")
             
-            # Analyze run output if execution was successful
-            run_analysis = {}
-            if execution_success and compile_results.get('run_output'):
-                run_analysis = self._analyze_run_output(compile_results['run_output'])
-                results['run_analysis'] = run_analysis
+            # Process the function
+            results = self.generate_optimized_function(file_path, function_name, benchmark_name)
             
-            if compilation_success:
-                logging.info(f"✓ Compilation successful")
-                if execution_success:
-                    logging.info(f"✓ Execution successful")
-                    
-                    # print verification results
-                    verification_success = run_analysis.get('verification_success')
-                    if verification_success:
-                        logging.info(f"🔍 Verification: ✓ PASS")
-                    else:
-                        logging.warning(f"🔍 Verification: ✗ FAIL")
+            # Save results for this function with benchmark prefix
+            self.save_results(results, output_dir, benchmark_name)
+            
+            # Collect status for each function
+            function_summary = {
+                "function_generation_success": results["function_generation_success"],
+            }
+            
+            # Add speedup if available
+            if "run_analysis" in results and results["run_analysis"].get("speedup") is not None:
+                function_summary["speedup"] = results["run_analysis"]["speedup"]
+            
+            all_results[function_name] = function_summary
+        
+        # Save aggregated results
+        all_summary_path = os.path.join(output_dir, f"{benchmark_name}_all_summary.json")
+        with open(all_summary_path, 'w') as f:
+            json.dump(all_results, f, indent=2)
+        logging.info(f"Summary saved to {all_summary_path}")
+        
+        return all_results
 
-                    # Print performance analysis
-                    logging.info(f"📊 Performance Analysis:")
-                    if run_analysis.get('original_time') is not None:
-                        logging.info(f"  Original time: {run_analysis['original_time']:.6f} seconds")
-                    if run_analysis.get('optimized_time') is not None:
-                        logging.info(f"  Optimized time: {run_analysis['optimized_time']:.6f} seconds")
-                    if run_analysis.get('speedup') is not None:
-                        logging.info(f"  Speedup: {run_analysis['speedup']:.2f}x")
-                    
-                else:
-                    logging.error(f"✗ Execution failed:")
-                    logging.error(compile_results['run_error'])
-            else:
-                logging.error(f"✗ Compilation failed:")
-                logging.error(compile_results['compile_error'])
-        else:
-            logging.warning("No optimized code generated to compile")
+    def _extract_function_signature_from_code(self, complete_code: str, function_name: str) -> str:
+        """
+        Extract just the function signature (declaration) from C++ code.
         
-        # Add comprehensive status tracking
-        results.update({
-            "compilation_success": compilation_success,
-            "execution_success": execution_success,
-            "verification_success": verification_success,
-        })
+        Args:
+            complete_code: The complete C++ source code
+            function_name: Name of the function to extract signature for
+            
+        Returns:
+            The function signature as a string (up to the opening brace)
+        """
+        # Split code into lines for easier processing
+        lines = complete_code.split('\n')
         
-        # Save results
-        self.save_results(results, output_dir)
+        # Find the line containing the function name
+        function_start_line = -1
+        for i, line in enumerate(lines):
+            if function_name in line and '(' in line:
+                function_start_line = i
+                break
         
-        return results
+        if function_start_line == -1:
+            return ""
+        
+        # Look backwards to find the return type
+        signature_start_line = function_start_line
+        for i in range(function_start_line, -1, -1):
+            line_stripped = lines[i].strip()
+            if (line_stripped.startswith('void') or 
+                line_stripped.startswith('int') or
+                line_stripped.startswith('double') or
+                line_stripped.startswith('float') or
+                line_stripped.startswith('char') or
+                line_stripped.startswith('static') or
+                line_stripped.startswith('template') or
+                line_stripped.startswith('inline')):
+                signature_start_line = i
+                break
+        
+        # Extract lines from return type to the opening brace
+        signature_lines = []
+        for i in range(signature_start_line, len(lines)):
+            line = lines[i]
+            signature_lines.append(line)
+            
+            # Stop when we reach the opening brace
+            if '{' in line:
+                # Remove the opening brace and everything after it
+                brace_pos = line.find('{')
+                last_line = line[:brace_pos].rstrip()
+                signature_lines[-1] = last_line
+                break
+        
+        # Join the lines and clean up
+        signature = '\n'.join(signature_lines).strip()
+        return signature
+
+    def _replace_function_in_code(self, complete_code: str, function_name: str, new_implementation: str) -> str:
+        """
+        Replace a function implementation in the complete code with a new implementation.
+        
+        Args:
+            complete_code: The complete C++ source code
+            function_name: Name of the function to replace
+            new_implementation: The new function implementation
+            
+        Returns:
+            The updated complete code with replaced function
+        """
+        lines = complete_code.split('\n')
+        
+        # Find the function start and end
+        function_start_line = -1
+        function_end_line = -1
+        
+        # Find the line containing the function name
+        for i, line in enumerate(lines):
+            if function_name in line and '(' in line:
+                # Look backwards to find the return type
+                for j in range(i, -1, -1):
+                    line_stripped = lines[j].strip()
+                    if (line_stripped.startswith('void') or 
+                        line_stripped.startswith('int') or
+                        line_stripped.startswith('double') or
+                        line_stripped.startswith('float') or
+                        line_stripped.startswith('char') or
+                        line_stripped.startswith('static') or
+                        line_stripped.startswith('template') or
+                        line_stripped.startswith('inline')):
+                        function_start_line = j
+                        break
+                break
+        
+        if function_start_line == -1:
+            return complete_code  # Function not found, return original
+        
+        # Find the end of the function by counting braces
+        open_braces = 0
+        found_opening_brace = False
+        
+        for i in range(function_start_line, len(lines)):
+            line = lines[i]
+            
+            # Count braces
+            for char in line:
+                if char == '{':
+                    open_braces += 1
+                    found_opening_brace = True
+                elif char == '}':
+                    open_braces -= 1
+            
+            # If we found the opening brace and braces are balanced, we found the end
+            if found_opening_brace and open_braces == 0:
+                function_end_line = i
+                break
+        
+        if function_end_line == -1:
+            return complete_code  # Could not find function end, return original
+        
+        # Replace the function
+        new_lines = (lines[:function_start_line] + 
+                    [new_implementation] + 
+                    lines[function_end_line + 1:])
+        
+        return '\n'.join(new_lines)
