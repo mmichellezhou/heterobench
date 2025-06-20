@@ -231,7 +231,7 @@ int main(int argc, char **argv) {
 
   // Compare original and optimized results
   cout << "Comparing original and optimized results..." << endl;
-  compareResults(outputs, outputs_optimized, 1e-4, "Results");
+  compareResults(outputs, outputs_optimized, 1e-4, "Flow");
 
   /* Performance measurement. */
   int iterations = ITERATIONS;
