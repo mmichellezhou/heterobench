@@ -1,0 +1,44 @@
+```cpp
+void relu_optimized(double *relu_input, double *relu_output, int size) {
+  int i;
+  // Loop unrolling is applied to reduce loop overhead (branching, incrementing)
+  // and expose instruction-level parallelism (ILP). For simple element-wise
+  // operations like ReLU, where memory access is sequential and the computation
+  // per element is minimal, unrolling helps by allowing the CPU to keep more
+  // operations in flight and hide memory latencies.
+  //
+  // The 'std::max' function is used, relying on the compiler to generate efficient
+  // scalar code. Explicit vectorization (processing multiple data elements
+  // simultaneously with packed SIMD instructions) is avoided as per the
+  // problem's constraints.
+  
+  // Define the unroll factor. A factor of 8 is chosen as it's a common and
+  // effective unroll factor for double-precision floating-point operations
+  // on modern CPUs, balancing ILP exposure with potential register pressure.
+  const int unroll_factor = 8; 
+  
+  // Calculate the loop limit for the unrolled main loop.
+  // This ensures that the main loop processes chunks of 'unroll_factor' elements.
+  int limit = size - (size % unroll_factor); 
+
+  // Main loop: Process elements in unrolled chunks
+  for (i = 0; i < limit; i += unroll_factor) {
+    // Unrolled block for 8 double elements.
+    // Each operation is independent, allowing the CPU to execute them in parallel.
+    relu_output[i] = std::max(0.0, relu_input[i]);
+    relu_output[i+1] = std::max(0.0, relu_input[i+1]);
+    relu_output[i+2] = std::max(0.0, relu_input[i+2]);
+    relu_output[i+3] = std::max(0.0, relu_input[i+3]);
+    relu_output[i+4] = std::max(0.0, relu_input[i+4]);
+    relu_output[i+5] = std::max(0.0, relu_input[i+5]);
+    relu_output[i+6] = std::max(0.0, relu_input[i+6]);
+    relu_output[i+7] = std::max(0.0, relu_input[i+7]);
+  }
+
+  // Remainder loop: Process any remaining elements that did not fit into
+  // the unrolled chunks (i.e., 'size % unroll_factor' elements).
+  for (; i < size; i++) {
+    relu_output[i] = std::max(0.0, relu_input[i]);
+  }
+}
+```

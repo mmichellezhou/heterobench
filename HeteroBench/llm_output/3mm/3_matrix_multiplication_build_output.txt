@@ -1,0 +1,44 @@
+BUILD COMMAND: make run_simple
+STDOUT:
+clang++ -Wall -Wextra -pedantic -std=c++11 -fopenmp -w -DITERATIONS=1 -DNI=1024 -DNJ=1024 -DNK=1024 -DNL=1024 -DNM=1024 -Icpu_impl/include -Icpu_impl_optimized/include -I. -c cpu_impl_optimized/kernel_3mm_0_optimized.cpp -o cpu_impl_optimized/kernel_3mm_0_optimized.o
+clang++ -Wall -Wextra -pedantic -std=c++11 -fopenmp -w -DITERATIONS=1 -DNI=1024 -DNJ=1024 -DNK=1024 -DNL=1024 -DNM=1024 -Icpu_impl/include -Icpu_impl_optimized/include -I. -c cpu_impl_optimized/kernel_3mm_1_optimized.cpp -o cpu_impl_optimized/kernel_3mm_1_optimized.o
+clang++ -Wall -Wextra -pedantic -std=c++11 -fopenmp -w -DITERATIONS=1 -DNI=1024 -DNJ=1024 -DNK=1024 -DNL=1024 -DNM=1024 -Icpu_impl/include -Icpu_impl_optimized/include -I. -c cpu_impl_optimized/kernel_3mm_2_optimized.cpp -o cpu_impl_optimized/kernel_3mm_2_optimized.o
+clang++ -fopenmp -o krnl_3mm_sw_simple main_simple.o init_array.o cpu_impl/kernel_3mm_0.o cpu_impl/kernel_3mm_1.o cpu_impl/kernel_3mm_2.o cpu_impl_optimized/kernel_3mm_0_optimized.o cpu_impl_optimized/kernel_3mm_1_optimized.o cpu_impl_optimized/kernel_3mm_2_optimized.o -lgomp
+./krnl_3mm_sw_simple
+=======================================
+Running 3mm benchmark C++ Serial
+=======================================
+Running 1 warm up iteration for original implementation...
+Done
+Checking original implementation results...
+Original implementation output is correct!
+Running 1 warm up iteration for optimized implementation...
+Done
+Checking optimized implementation results...
+Optimized implementation output is correct!
+Running 1 iterations for performance measurement...
+Running original implementation...
+Done
+Running optimized implementation...
+Done
+=======================================
+Performance Results:
+=======================================
+Original Implementation:
+  kernel_3mm_0 time: 6.61244 seconds
+  kernel_3mm_1 time: 6.60393 seconds
+  kernel_3mm_2 time: 2.22887 seconds
+  Single iteration time: 15.4452 seconds
+Optimized Implementation:
+  kernel_3mm_0 time: 2.66047 seconds
+  kernel_3mm_1 time: 2.96772 seconds
+  kernel_3mm_2 time: 1.61548 seconds
+  Single iteration time: 7.24367 seconds
+Speedup:
+  kernel_3mm_0: 2.48544x
+  kernel_3mm_1: 2.22525x
+  kernel_3mm_2: 1.3797x
+  Total: 2.13224x
+Whole time: 22.6889 seconds
+
+STDERR:

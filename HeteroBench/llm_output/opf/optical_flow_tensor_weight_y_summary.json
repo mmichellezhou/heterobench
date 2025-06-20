@@ -1,0 +1,47 @@
+{
+  "function_name": "tensor_weight_y",
+  "original_file_path": "benchmarks/optical_flow/homobackend_cpu/Cpp/cpu_impl/tensor_weight_y.cpp",
+  "optimized_file_path": "benchmarks/optical_flow/homobackend_cpu/Cpp/cpu_impl_optimized/tensor_weight_y_optimized.cpp",
+  "status": {
+    "function_generation_success": true,
+    "compilation_success": false,
+    "execution_success": false,
+    "verification_success": false
+  },
+  "statistics": {
+    "num_code_blocks_generated": 1,
+    "optimized_code_length": 4852,
+    "prompt_length": 4384,
+    "llm_response_length": 4863
+  },
+  "details": {
+    "entire_llm_response": {
+      "model": "gemini-2.5-flash-preview-05-20",
+      "provider": "google",
+      "temperature": 0.0,
+      "max_tokens": 65536,
+      "response": {
+        "id": "mwdVaOnFG9Cs1MkPlp2LkQE",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "```cpp\nvoid tensor_weight_y_optimized(outer_t outer[MAX_HEIGHT][MAX_WIDTH],\n                     tensor_t tensor_y[MAX_HEIGHT][MAX_WIDTH])\n{\n  // Optimization 1: Loop Restructuring and Branch Removal\n  // The original code's behavior for r=0, r=1, and r=MAX_HEIGHT is to write\n  // zero-initialized 'acc' values to specific rows of 'tensor_y'.\n  // We handle these boundary conditions explicitly to remove conditional branches\n  // from the main computation loop, improving instruction-level parallelism and predictability.\n\n  // Handle r = 0:\n  // In the original code, for r=0, the condition `if (r >= 1)` is false,\n  // so no write to `tensor_y` occurs. No explicit action is needed here.\n\n  // Handle r = 1:\n  // For r=1, the computation `if (r >= 2 && r < MAX_HEIGHT)` is false,\n  // so `acc` remains zero-initialized. The condition `if (r >= 1)` is true,\n  // leading to `tensor_y[0][c] = acc;` (i.e., zeroing out `tensor_y[0][c]`).\n  // This loop explicitly zeroes out the first row of tensor_y.\n  for (int c = 0; c < MAX_WIDTH; c++)\n  {\n    for (int k = 0; k < 6; k++)\n    {\n      tensor_y[0][c].val[k] = 0;\n    }\n  }\n\n  // Optimization 2: Register Promotion for TENSOR_FILTER\n  // Load the constant filter values into local variables. This ensures they are\n  // likely held in CPU registers throughout the main loops, reducing memory accesses.\n  const float filter0 = TENSOR_FILTER[0];\n  const float filter1 = TENSOR_FILTER[1];\n  const float filter2 = TENSOR_FILTER[2];\n\n  // Main computation loop for r from 2 to MAX_HEIGHT-1:\n  // This range corresponds to where the original `if (r >= 2 && r < MAX_HEIGHT)`\n  // condition is true, and actual computation takes place.\n  for (int r = 2; r < MAX_HEIGHT; r++)\n  {\n    for (int c = 0; c < MAX_WIDTH; c++)\n    {\n      // Optimization 3: Register Optimization for Accumulators\n      // Declare and initialize accumulators for the 6 components as individual local variables.\n      // This encourages the compiler to map them directly to CPU registers, minimizing\n      // memory traffic for `acc.val` and enabling efficient accumulation.\n      float acc_val_0 = 0.0f;\n      float acc_val_1 = 0.0f;\n      float acc_val_2 = 0.0f;\n      float acc_val_3 = 0.0f;\n      float acc_val_4 = 0.0f;\n      float acc_val_5 = 0.0f;\n\n      // Optimization 4: Loop Unrolling and Loop Interchange\n      // The original inner loops (`i` and `component`) are fully unrolled.\n      // The loop interchange (conceptually moving `component` loop outside `i` loop)\n      // is implicitly applied by processing each component's accumulation fully before moving\n      // to the next component. This eliminates loop overheads (branching, index increments)\n      // and exposes maximum instruction-level parallelism to the CPU, allowing it to\n      // schedule independent operations concurrently.\n\n      // Component 0 accumulation\n      acc_val_0 += outer[r-0][c].val[0] * filter0; // i=0\n      acc_val_0 += outer[r-1][c].val[0] * filter1; // i=1\n      acc_val_0 += outer[r-2][c].val[0] * filter2; // i=2\n\n      // Component 1 accumulation\n      acc_val_1 += outer[r-0][c].val[1] * filter0;\n      acc_val_1 += outer[r-1][c].val[1] * filter1;\n      acc_val_1 += outer[r-2][c].val[1] * filter2;\n\n      // Component 2 accumulation\n      acc_val_2 += outer[r-0][c].val[2] * filter0;\n      acc_val_2 += outer[r-1][c].val[2] * filter1;\n      acc_val_2 += outer[r-2][c].val[2] * filter2;\n\n      // Component 3 accumulation\n      acc_val_3 += outer[r-0][c].val[3] * filter0;\n      acc_val_3 += outer[r-1][c].val[3] * filter1;\n      acc_val_3 += outer[r-2][c].val[3] * filter2;\n\n      // Component 4 accumulation\n      acc_val_4 += outer[r-0][c].val[4] * filter0;\n      acc_val_4 += outer[r-1][c].val[4] * filter1;\n      acc_val_4 += outer[r-2][c].val[4] * filter2;\n\n      // Component 5 accumulation\n      acc_val_5 += outer[r-0][c].val[5] * filter0;\n      acc_val_5 += outer[r-1][c].val[5] * filter1;\n      acc_val_5 += outer[r-2][c].val[5] * filter2;\n\n      // Store the accumulated results into tensor_y.\n      // This corresponds to `tensor_y[r-1][c] = acc;` in the original code.\n      tensor_y[r-1][c].val[0] = acc_val_0;\n      tensor_y[r-1][c].val[1] = acc_val_1;\n      tensor_y[r-1][c].val[2] = acc_val_2;\n      tensor_y[r-1][c].val[3] = acc_val_3;\n      tensor_y[r-1][c].val[4] = acc_val_4;\n      tensor_y[r-1][c].val[5] = acc_val_5;\n    }\n  }\n\n  // Handle r = MAX_HEIGHT:\n  // For r=MAX_HEIGHT, the computation `if (r >= 2 && r < MAX_HEIGHT)` is false,\n  // so `acc` remains zero-initialized. The condition `if (r >= 1)` is true,\n  // leading to `tensor_y[MAX_HEIGHT-1][c] = acc;` (i.e., zeroing out `tensor_y[MAX_HEIGHT-1][c]`).\n  // This loop explicitly zeroes out the last row of tensor_y.\n  for (int c = 0; c < MAX_WIDTH; c++)\n  {\n    for (int k = 0; k < 6; k++)\n    {\n      tensor_y[MAX_HEIGHT-1][c].val[k] = 0;\n    }\n  }\n}\n```",
+              "function_call": null,
+              "tool_calls": null
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "created": 1750402971,
+        "model": "gemini-2.5-flash-preview-05-20",
+        "usage": {
+          "prompt_tokens": 1233,
+          "completion_tokens": 1683,
+          "total_tokens": 12544
+        }
+      }
+    }
+  }
+}

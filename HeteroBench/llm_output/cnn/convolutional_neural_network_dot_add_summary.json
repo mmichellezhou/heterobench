@@ -1,0 +1,47 @@
+{
+  "function_name": "dot_add",
+  "original_file_path": "benchmarks/convolutional_neural_network/homobackend_cpu/Cpp/cpu_impl/dot_add.cpp",
+  "optimized_file_path": "benchmarks/convolutional_neural_network/homobackend_cpu/Cpp/cpu_impl_optimized/dot_add_optimized.cpp",
+  "status": {
+    "function_generation_success": true,
+    "compilation_success": false,
+    "execution_success": false,
+    "verification_success": false
+  },
+  "statistics": {
+    "num_code_blocks_generated": 1,
+    "optimized_code_length": 4768,
+    "prompt_length": 4119,
+    "llm_response_length": 4779
+  },
+  "details": {
+    "entire_llm_response": {
+      "model": "gemini-2.5-flash-preview-05-20",
+      "provider": "google",
+      "temperature": 0.0,
+      "max_tokens": 65536,
+      "response": {
+        "id": "1gJVaLyHLKSa1MkP3MnryQ4",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "```cpp\n#include <algorithm> // Required for std::min\n\nvoid dot_add_optimized(double *dot_add_input_x, double *dot_add_input_W, double *dot_add_input_b, double *dot_add_output, int x_h, int x_w, int W_h, int W_w) {\n  // Define local constants for tiling and unrolling factors.\n  // These values are chosen as common heuristics for double-precision floating-point operations\n  // on modern CPUs, balancing cache locality, instruction-level parallelism, and register pressure.\n  // TILE_J: A tile size for the 'j' dimension (columns of W and output).\n  //         A value of 64 doubles (512 bytes) is small enough to fit comfortably in L1 cache.\n  const int TILE_J = 64;\n  // UNROLL_J: Unroll factor for the innermost 'j' loop.\n  //           Unrolling by 4 exposes more independent operations for the CPU's execution units,\n  //           reducing loop overhead and improving instruction-level parallelism (ILP).\n  const int UNROLL_J = 4;\n\n  // Phase 1: Initialize the output matrix with the bias values.\n  // This combines the initialization step and the bias addition, eliminating a separate loop nest later.\n  // The matrix multiplication will then accumulate its results on top of these initial bias values.\n  for (int i = 0; i < x_h; i++) {\n    // Use pointer arithmetic for strength reduction, avoiding repeated multiplications.\n    double* current_output_row_ptr = dot_add_output + i * W_w;\n    // Unroll the inner loop for better performance during initialization.\n    for (int j = 0; j < W_w; j += UNROLL_J) {\n      // Handle tail cases where W_w is not a multiple of UNROLL_J.\n      if (j + 0 < W_w) {\n        current_output_row_ptr[j + 0] = dot_add_input_b[j + 0];\n      }\n      if (j + 1 < W_w) {\n        current_output_row_ptr[j + 1] = dot_add_input_b[j + 1];\n      }\n      if (j + 2 < W_w) {\n        current_output_row_ptr[j + 2] = dot_add_input_b[j + 2];\n      }\n      if (j + 3 < W_w) {\n        current_output_row_ptr[j + 3] = dot_add_input_b[j + 3];\n      }\n    }\n  }\n\n  // Phase 2: Perform the matrix multiplication (X * W) and accumulate results onto the bias-initialized output.\n  // The original loop order was ijk. This is transformed to ikj for improved cache performance.\n  // In the ikj order:\n  // - Accesses to dot_add_input_x[i * x_w + k] are sequential for 'k' within an 'i' row.\n  // - Accesses to dot_add_input_W[k * W_w + j] are sequential for 'j' within a 'k' row.\n  // - Accesses to dot_add_output[i * W_w + j] are sequential for 'j' within an 'i' row.\n  // This ensures stride-1 memory access patterns for the most frequently accessed data in the innermost loop,\n  // maximizing cache line utilization and reducing cache misses.\n  for (int i = 0; i < x_h; i++) {\n    // Pointer to the current row of X (dot_add_input_x[i][:])\n    double* current_x_row_ptr = dot_add_input_x + i * x_w;\n    // Pointer to the current row of Output (dot_add_output[i][:])\n    double* current_output_row_ptr = dot_add_output + i * W_w;\n\n    for (int k = 0; k < x_w; k++) {\n      // Load x_val once per (i, k) pair. This value is then reused W_w times in the inner 'j' loop,\n      // promoting register reuse and reducing memory loads.\n      double x_val = current_x_row_ptr[k];\n      // Pointer to the current row of W (dot_add_input_W[k][:])\n      double* current_W_row_ptr = dot_add_input_W + k * W_w;\n\n      // Tiled loop for 'j' dimension.\n      // This helps keep a smaller, more cache-friendly block of 'W' and 'Output' data in L1/L2 cache,\n      // especially when W_w is very large.\n      for (int jj = 0; jj < W_w; jj += TILE_J) {\n        // Calculate the actual end index for the current 'j' tile, handling boundary conditions.\n        int j_end_tile = std::min(jj + TILE_J, W_w);\n\n        // Unrolled loop for 'j' dimension.\n        // This reduces loop control overhead (branching, incrementing 'j') and exposes more\n        // independent multiply-add operations to the CPU's execution units, improving ILP.\n        for (int j = jj; j < j_end_tile; j += UNROLL_J) {\n          // Perform UNROLL_J multiply-add operations.\n          // Each operation is independent, allowing the CPU to pipeline them effectively.\n          // Explicitly check bounds for tail cases within the unrolled block to ensure correctness.\n          if (j + 0 < j_end_tile) {\n            current_output_row_ptr[j + 0] += x_val * current_W_row_ptr[j + 0];\n          }\n          if (j + 1 < j_end_tile) {\n            current_output_row_ptr[j + 1] += x_val * current_W_row_ptr[j + 1];\n          }\n          if (j + 2 < j_end_tile) {\n            current_output_row_ptr[j + 2] += x_val * current_W_row_ptr[j + 2];\n          }\n          if (j + 3 < j_end_tile) {\n            current_output_row_ptr[j + 3] += x_val * current_W_row_ptr[j + 3];\n          }\n        }\n      }\n    }\n  }\n}\n```",
+              "function_call": null,
+              "tool_calls": null
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "created": 1750401750,
+        "model": "gemini-2.5-flash-preview-05-20",
+        "usage": {
+          "prompt_tokens": 1229,
+          "completion_tokens": 1534,
+          "total_tokens": 11937
+        }
+      }
+    }
+  }
+}

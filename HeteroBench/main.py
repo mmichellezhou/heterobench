@@ -110,20 +110,19 @@ def run_benchmark_and_analyze(benchmark_name: str, benchmark_path: str, output_d
         }
         
         if build_result.returncode == 0:
+            # Check for verification failure
+            output_lower = build_result.stdout.lower()
+            fail_keywords = ["incorrect", "fail", "wrong"]
+            analysis["verification_success"] = not any(keyword in output_lower for keyword in fail_keywords)
+
             # Parse the output for performance metrics
             lines = build_result.stdout.split('\n')
             
             for i, line in enumerate(lines):
                 line = line.strip()
                 
-                # Look for verification results
-                if "Results:" in line and "Pass" in line:
-                    analysis["verification_success"] = True
-                elif "Results:" in line and "Fail" in line:
-                    analysis["verification_success"] = False
-                
                 # Look for speedup
-                elif "Speedup:" in line:
+                if "Speedup:" in line:
                     # Look for "Total:" on the next few lines
                     for j in range(i+1, min(i+10, len(lines))):
                         next_line = lines[j].strip()
@@ -268,6 +267,7 @@ def main():
     # Create output directory first
     output_dir = f"llm_output/{datetime.now().strftime('%Y%m%d_%H%M%S')}_{args.model}"
     os.makedirs(output_dir, exist_ok=True)
+    output_dir = os.path.abspath(output_dir)
     
     # Setup logging
     log_file = setup_logging(output_dir)

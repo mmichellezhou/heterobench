@@ -1,0 +1,22 @@
+BUILD COMMAND: make run_simple
+STDOUT:
+clang++ -Wall -Wextra -pedantic -std=c++11 -fopenmp -w -DITERATIONS=1 -Icpu_impl/include -Icpu_impl_optimized/include -I. -c cpu_impl_optimized/compute_gradient_magnitude_optimized.cpp -o cpu_impl_optimized/compute_gradient_magnitude_optimized.o
+
+STDERR:
+cpu_impl_optimized/compute_gradient_magnitude_optimized.cpp:44:33: error: use of undeclared identifier 'sqrt'
+        gradient_magnitude[i] = sqrt(sx0 * sx0 + sy0 * sy0);
+                                ^
+cpu_impl_optimized/compute_gradient_magnitude_optimized.cpp:49:37: error: use of undeclared identifier 'sqrt'
+        gradient_magnitude[i + 1] = sqrt(sx1 * sx1 + sy1 * sy1);
+                                    ^
+cpu_impl_optimized/compute_gradient_magnitude_optimized.cpp:54:37: error: use of undeclared identifier 'sqrt'
+        gradient_magnitude[i + 2] = sqrt(sx2 * sx2 + sy2 * sy2);
+                                    ^
+cpu_impl_optimized/compute_gradient_magnitude_optimized.cpp:59:37: error: use of undeclared identifier 'sqrt'
+        gradient_magnitude[i + 3] = sqrt(sx3 * sx3 + sy3 * sy3);
+                                    ^
+cpu_impl_optimized/compute_gradient_magnitude_optimized.cpp:66:33: error: use of undeclared identifier 'sqrt'
+        gradient_magnitude[i] = sqrt(sobel_x[i] * sobel_x[i] + sobel_y[i] * sobel_y[i]);
+                                ^
+5 errors generated.
+make: *** [Makefile:63: cpu_impl_optimized/compute_gradient_magnitude_optimized.o] Error 1

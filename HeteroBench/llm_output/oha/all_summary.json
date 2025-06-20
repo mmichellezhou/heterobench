@@ -1,0 +1,29 @@
+{
+  "one_head_attention": {
+    "function_results": {
+      "matmul": {
+        "function_generation_success": true
+      },
+      "softmax": {
+        "function_generation_success": true
+      },
+      "transpose": {
+        "function_generation_success": true
+      }
+    },
+    "performance_analysis": {
+      "verification_success": true,
+      "original_time": 12.2784,
+      "optimized_time": 3.04475,
+      "speedup": 4.03264,
+      "build_success": true
+    },
+    "overall_status": {
+      "functions_processed": 3,
+      "functions_successful": 3,
+      "build_success": true,
+      "verification_success": true
+    },
+    "speedup": 4.03264
+  }
+}

@@ -1,6 +1,104 @@
 #include "cpu_impl.h"
 
-void knn_vote_optimized(int labels[], LabelType* max_label) 
+void knn_vote_optimized(int labels[], LabelType* max_label)
 {
-    knn_vote(labels, max_label);
+    int max_vote = 0;
+    // Initialize votes array. All elements are set to zero.
+    int votes[10] = {0};
+
+    // Loop 1: Counting votes
+    // This loop is partially unrolled by a factor of 4 to reduce loop overhead
+    // and expose more instruction-level parallelism for the CPU's out-of-order
+    // execution engine. This allows multiple memory loads from 'labels' and
+    // increments to 'votes' to be processed concurrently when possible.
+    int i = 0;
+    for (; i + 3 < K_CONST; i += 4)
+    {
+        votes[labels[i]]++;
+        votes[labels[i+1]]++;
+        votes[labels[i+2]]++;
+        votes[labels[i+3]]++;
+    }
+
+    // Cleanup loop for any remaining elements if K_CONST is not a multiple of 4.
+    for (; i < K_CONST; i++)
+    {
+        votes[labels[i]]++;
+    }
+
+    // Loop 2: Finding the maximum vote and corresponding label
+    // This loop iterates a fixed, small number of times (10).
+    // It is fully unrolled to eliminate all loop overhead (branching, incrementing counter)
+    // and maximize instruction-level parallelism. Each comparison and potential assignment
+    // is explicitly laid out, allowing the CPU to schedule these operations efficiently.
+
+    // Iteration 0
+    int current_votes_0 = votes[0];
+    if (current_votes_0 > max_vote) {
+        max_vote = current_votes_0;
+        *max_label = 0;
+    }
+
+    // Iteration 1
+    int current_votes_1 = votes[1];
+    if (current_votes_1 > max_vote) {
+        max_vote = current_votes_1;
+        *max_label = 1;
+    }
+
+    // Iteration 2
+    int current_votes_2 = votes[2];
+    if (current_votes_2 > max_vote) {
+        max_vote = current_votes_2;
+        *max_label = 2;
+    }
+
+    // Iteration 3
+    int current_votes_3 = votes[3];
+    if (current_votes_3 > max_vote) {
+        max_vote = current_votes_3;
+        *max_label = 3;
+    }
+
+    // Iteration 4
+    int current_votes_4 = votes[4];
+    if (current_votes_4 > max_vote) {
+        max_vote = current_votes_4;
+        *max_label = 4;
+    }
+
+    // Iteration 5
+    int current_votes_5 = votes[5];
+    if (current_votes_5 > max_vote) {
+        max_vote = current_votes_5;
+        *max_label = 5;
+    }
+
+    // Iteration 6
+    int current_votes_6 = votes[6];
+    if (current_votes_6 > max_vote) {
+        max_vote = current_votes_6;
+        *max_label = 6;
+    }
+
+    // Iteration 7
+    int current_votes_7 = votes[7];
+    if (current_votes_7 > max_vote) {
+        max_vote = current_votes_7;
+        *max_label = 7;
+    }
+
+    // Iteration 8
+    int current_votes_8 = votes[8];
+    if (current_votes_8 > max_vote) {
+        max_vote = current_votes_8;
+        *max_label = 8;
+    }
+
+    // Iteration 9
+    int current_votes_9 = votes[9];
+    if (current_votes_9 > max_vote) {
+        max_vote = current_votes_9;
+        *max_label = 9;
+    }
 }

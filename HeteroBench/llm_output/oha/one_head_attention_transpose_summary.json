@@ -1,0 +1,47 @@
+{
+  "function_name": "transpose",
+  "original_file_path": "benchmarks/one_head_attention/homobackend_cpu/Cpp/cpu_impl/transpose.cpp",
+  "optimized_file_path": "benchmarks/one_head_attention/homobackend_cpu/Cpp/cpu_impl_optimized/transpose_optimized.cpp",
+  "status": {
+    "function_generation_success": true,
+    "compilation_success": false,
+    "execution_success": false,
+    "verification_success": false
+  },
+  "statistics": {
+    "num_code_blocks_generated": 1,
+    "optimized_code_length": 5537,
+    "prompt_length": 4785,
+    "llm_response_length": 5548
+  },
+  "details": {
+    "entire_llm_response": {
+      "model": "gemini-2.5-flash-preview-05-20",
+      "provider": "google",
+      "temperature": 0.0,
+      "max_tokens": 65536,
+      "response": {
+        "id": "2AVVaK3VOaSa1MkP3MnryQ4",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "```cpp\nvoid transpose_optimized(double *transpose_x, double *transpose_output, \n                int batch_size, int input_h, int input_w, int dim0, int dim1) {\n    if (dim0 == -2 && dim1 == -1) {\n        // Define tile size for cache blocking.\n        // A tile size of 256x256 doubles results in a working set of 1MB (2 * 256 * 256 * 8 bytes),\n        // which fits comfortably within the 1.5MB L1d cache of the target CPU.\n        const int TILE_SIZE = 256; \n        \n        // Define unroll factor for the innermost loop.\n        // Unrolling by 8 doubles (64 bytes) aligns with a typical cache line size,\n        // reducing loop overhead and exposing more instruction-level parallelism.\n        const int UNROLL_FACTOR = 8; \n\n        // Outer loop for batch dimension 'i'\n        for (int i = 0; i < batch_size; i++) {\n            // Pre-calculate the base offset for the current batch 'i' for both input and output arrays.\n            // Using long long to prevent potential overflow for large dimensions.\n            long long i_offset = (long long)i * input_h * input_w;\n\n            // Tiling loop for the 'j' (input_h) dimension\n            for (int jj = 0; jj < input_h; jj += TILE_SIZE) {\n                // Calculate the actual end of the current 'j' block, clamping to input_h\n                int j_block_end = jj + TILE_SIZE;\n                if (j_block_end > input_h) j_block_end = input_h;\n\n                // Tiling loop for the 'k' (input_w) dimension\n                for (int kk = 0; kk < input_w; kk += TILE_SIZE) {\n                    // Calculate the actual end of the current 'k' block, clamping to input_w\n                    int k_block_end = kk + TILE_SIZE;\n                    if (k_block_end > input_w) k_block_end = input_w;\n\n                    // Inner loops for processing the current tile (jj:j_block_end, kk:k_block_end)\n                    // The loop order is 'k' (output column) then 'j' (output row).\n                    // This ensures that writes to 'transpose_output' are contiguous,\n                    // which is crucial for write-back cache performance.\n                    for (int k = kk; k < k_block_end; k++) {\n                        // Strength reduction: 'k_offset_output' is constant for the inner 'j' loop.\n                        // Cast 'k' to long long to ensure the multiplication is performed with sufficient precision.\n                        long long k_offset_output = (long long)k * input_h;\n\n                        // Unrolled 'j' loop for instruction-level parallelism and reduced loop overhead.\n                        // This processes UNROLL_FACTOR elements at a time.\n                        int j = jj;\n                        for (; j + UNROLL_FACTOR <= j_block_end; j += UNROLL_FACTOR) {\n                            // Strength reduction: 'j_offset_x_base' is the base offset for 'transpose_x'\n                            // within this unrolled block.\n                            // Cast 'j' to long long to ensure the multiplication is performed with sufficient precision.\n                            long long j_offset_x_base = (long long)j * input_w;\n\n                            // Perform 8 assignments in one go.\n                            // Accesses to 'transpose_output' are contiguous (j, j+1, ...).\n                            // Accesses to 'transpose_x' are strided by 'input_w' (j*input_w+k, (j+1)*input_w+k, ...).\n                            // Tiling helps ensure these strided accesses remain within cache.\n                            transpose_output[i_offset + k_offset_output + j] = \n                                transpose_x[i_offset + j_offset_x_base + k];\n                            transpose_output[i_offset + k_offset_output + j + 1] = \n                                transpose_x[i_offset + j_offset_x_base + 1LL * input_w + k];\n                            transpose_output[i_offset + k_offset_output + j + 2] = \n                                transpose_x[i_offset + j_offset_x_base + 2LL * input_w + k];\n                            transpose_output[i_offset + k_offset_output + j + 3] = \n                                transpose_x[i_offset + j_offset_x_base + 3LL * input_w + k];\n                            transpose_output[i_offset + k_offset_output + j + 4] = \n                                transpose_x[i_offset + j_offset_x_base + 4LL * input_w + k];\n                            transpose_output[i_offset + k_offset_output + j + 5] = \n                                transpose_x[i_offset + j_offset_x_base + 5LL * input_w + k];\n                            transpose_output[i_offset + k_offset_output + j + 6] = \n                                transpose_x[i_offset + j_offset_x_base + 6LL * input_w + k];\n                            transpose_output[i_offset + k_offset_output + j + 7] = \n                                transpose_x[i_offset + j_offset_x_base + 7LL * input_w + k];\n                        }\n                        // Handle any remaining elements that don't fit into the unrolled block (tail processing)\n                        for (; j < j_block_end; j++) {\n                            transpose_output[i_offset + k_offset_output + j] = \n                                transpose_x[i_offset + (long long)j * input_w + k];\n                        }\n                    }\n                }\n            }\n        }\n    } else {\n        // Fallback to original behavior for unimplemented cases (dim0 != -2 or dim1 != -1)\n        std::cout << \"Not implemented yet for dim0 != -2 or dim1 != -1\" << std::endl;\n    }\n}\n```",
+              "function_call": null,
+              "tool_calls": null
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "created": 1750402521,
+        "model": "gemini-2.5-flash-preview-05-20",
+        "usage": {
+          "prompt_tokens": 1292,
+          "completion_tokens": 1456,
+          "total_tokens": 12269
+        }
+      }
+    }
+  }
+}

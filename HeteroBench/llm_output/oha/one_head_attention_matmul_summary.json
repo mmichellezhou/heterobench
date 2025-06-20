@@ -1,0 +1,47 @@
+{
+  "function_name": "matmul",
+  "original_file_path": "benchmarks/one_head_attention/homobackend_cpu/Cpp/cpu_impl/matmul.cpp",
+  "optimized_file_path": "benchmarks/one_head_attention/homobackend_cpu/Cpp/cpu_impl_optimized/matmul_optimized.cpp",
+  "status": {
+    "function_generation_success": true,
+    "compilation_success": false,
+    "execution_success": false,
+    "verification_success": false
+  },
+  "statistics": {
+    "num_code_blocks_generated": 1,
+    "optimized_code_length": 4809,
+    "prompt_length": 5125,
+    "llm_response_length": 4820
+  },
+  "details": {
+    "entire_llm_response": {
+      "model": "gemini-2.5-flash-preview-05-20",
+      "provider": "google",
+      "temperature": 0.0,
+      "max_tokens": 65536,
+      "response": {
+        "id": "awVVaPjYNaWy1MkPsceE-Q8",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "```cpp\nvoid matmul_optimized(double *matmul_x, double *matmul_y, double *matmul_output,\n                int batch_size, int input_h, int input_w, int output_w) {\n    // Initialize matmul_output to 0.\n    // This loop is already efficient due to contiguous writes.\n    // Using (long long) for the loop bound to prevent potential integer overflow\n    // if batch_size * input_h * output_w exceeds INT_MAX.\n    for (long long i = 0; i < (long long)batch_size * input_h * output_w; ++i) {\n        matmul_output[i] = 0.0;\n    }\n\n    // Define tile sizes and unroll factor as local constants.\n    // These are within the function scope and do not require external definitions.\n    const int TILE_J = 64;    // Tile size for the 'j' dimension (rows of X and Output)\n    const int TILE_K = 64;    // Tile size for the 'k' dimension (columns of Y and Output)\n    const int TILE_L = 64;    // Tile size for the 'l' dimension (inner product dimension)\n    const int UNROLL_K = 4;   // Unroll factor for the innermost 'k' loop\n\n    // The overall loop order is i, jj, kk, ll, j, l, k.\n    // This order is chosen to maximize data reuse and improve cache locality\n    // by ensuring contiguous memory accesses in the innermost loops.\n\n    // Loop over batches (i)\n    for (int i = 0; i < batch_size; ++i) {\n        // Pre-calculate batch-level base pointers for strength reduction.\n        // Using (long long) for products to prevent potential integer overflow for large dimensions.\n        double* output_batch_base = matmul_output + (long long)i * input_h * output_w;\n        double* x_batch_base = matmul_x + (long long)i * input_h * input_w;\n        double* y_batch_base = matmul_y + (long long)i * input_w * output_w;\n\n        // Tiling loop for the 'j' dimension (rows of X and Output)\n        for (int jj = 0; jj < input_h; jj += TILE_J) {\n            // Tiling loop for the 'k' dimension (columns of Y and Output)\n            for (int kk = 0; kk < output_w; kk += TILE_K) {\n                // Tiling loop for the 'l' dimension (inner product dimension)\n                // This loop iterates over blocks of the reduction dimension.\n                for (int ll = 0; ll < input_w; ll += TILE_L) {\n\n                    // Inner loops processing elements within the current tiles.\n                    // Loop for 'j' (rows within the current 'j' tile)\n                    // Use ternary operator for bounds to avoid requiring <algorithm> for std::min.\n                    for (int j = jj; j < (jj + TILE_J < input_h ? jj + TILE_J : input_h); ++j) {\n                        // Pre-calculate row-level base pointers for X and Output.\n                        double* x_row_base = x_batch_base + (long long)j * input_w;\n                        double* output_row_base = output_batch_base + (long long)j * output_w;\n\n                        // Loop for 'l' (elements within the current 'l' tile)\n                        // Use ternary operator for bounds.\n                        for (int l = ll; l < (ll + TILE_L < input_w ? ll + TILE_L : input_w); ++l) {\n                            // Load x[i][j][l] once into a register (x_val) for reuse across 'k' loop.\n                            double x_val = x_row_base[l];\n\n                            // Pre-calculate column-level base pointer for Y.\n                            // y[i][l][k] accesses are contiguous in 'k' for fixed 'i' and 'l'.\n                            double* y_col_base = y_batch_base + (long long)l * output_w;\n\n                            // Loop for 'k' (columns within the current 'k' tile) - innermost loop.\n                            // This loop is unrolled to expose Instruction-Level Parallelism (ILP)\n                            // and reduce loop overhead.\n                            int k = kk;\n                            // Calculate the effective end bound for the current k-tile.\n                            int k_end_tile = (kk + TILE_K < output_w ? kk + TILE_K : output_w);\n\n                            // Unrolled loop body for 'k'\n                            for (; k + UNROLL_K <= k_end_tile; k += UNROLL_K) {\n                                output_row_base[k]     += x_val * y_col_base[k];\n                                output_row_base[k + 1] += x_val * y_col_base[k + 1];\n                                output_row_base[k + 2] += x_val * y_col_base[k + 2];\n                                output_row_base[k + 3] += x_val * y_col_base[k + 3];\n                            }\n                            // Remainder loop for 'k' (handles elements not covered by unrolling)\n                            for (; k < k_end_tile; ++k) {\n                                output_row_base[k] += x_val * y_col_base[k];\n                            }\n                        }\n                    }\n                }\n            }\n        }\n    }\n}\n```",
+              "function_call": null,
+              "tool_calls": null
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "created": 1750402411,
+        "model": "gemini-2.5-flash-preview-05-20",
+        "usage": {
+          "prompt_tokens": 1432,
+          "completion_tokens": 1311,
+          "total_tokens": 15105
+        }
+      }
+    }
+  }
+}

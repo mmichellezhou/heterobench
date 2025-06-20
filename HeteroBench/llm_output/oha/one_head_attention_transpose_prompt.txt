@@ -1,0 +1,109 @@
+You are an expert in high-performance computing and kernel engineering on the CPU. You are familiar with different optimization techniques including vectorization, memory access optimization, tiling, unrolling, loop transformations, and SIMD instructions. Focus on single-threaded performance improvement. Don't use multi-threading nor vectorization.
+
+Given the following code:
+```cpp
+/*
+ * (C) Copyright [2024] Hewlett Packard Enterprise Development LP
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a
+ * copy of this software and associated documentation files (the Software),
+ * to deal in the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included
+ * in all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+ * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+ 
+#include "cpu_impl.h"
+#include <iostream>
+#include <math.h>
+
+using namespace std;
+
+/* This is the Cpp implementation of the following Python code */
+/* Here the input and output are 3D arraies */
+/*
+    def transpose(x, dim0=-2, dim1=-1):
+        # implement the x.swapaxes(-2, -1) manually
+        shape = list(x.shape)
+        shape[dim0], shape[dim1] = shape[dim1], shape[dim0]
+        transpose_x = np.zeros(shape)
+        for i in range(shape[0]):
+            for j in range(shape[dim0]):
+                for k in range(shape[dim1]):
+                    transpose_x[i, j, k] = x[i, k, j]
+
+        return transpose_x
+*/
+
+void transpose(double *transpose_x, double *transpose_output, 
+                int batch_size, int input_h, int input_w, int dim0, int dim1) {
+    if (dim0 == -2 && dim1 == -1) {
+        for (int i = 0; i < batch_size; i++) {
+            for (int j = 0; j < input_h; j++) {
+                for (int k = 0; k < input_w; k++) {
+                    transpose_output[i * input_h * input_w + k * input_h + j] = 
+                        transpose_x[i * input_h * input_w + j * input_w + k];
+                }
+            }
+        }
+    } else {
+        cout << "Not implemented yet for dim0 != -2 or dim1 != -1" << endl;
+    }
+}
+```
+
+with the following function to optimize: 
+```cpp
+                int batch_size, int input_h, int input_w, int dim0, int dim1) {
+    if (dim0 == -2 && dim1 == -1) {
+        for (int i = 0; i < batch_size; i++) {
+            for (int j = 0; j < input_h; j++) {
+                for (int k = 0; k < input_w; k++) {
+                    transpose_output[i * input_h * input_w + k * input_h + j] = 
+                        transpose_x[i * input_h * input_w + j * input_w + k];
+                }
+            }
+        }
+    } else {
+        cout << "Not implemented yet for dim0 != -2 or dim1 != -1" << endl;
+    }
+}
+```
+
+Task: Analyze this function and generate an optimized implementation to get better performance while maintaining functional equivalence. Apply optimizations such as memory access optimization, tiling, unrolling, loop transformations, strength reduction, register optimization, and instruction-level parallelism.
+
+Machine we are using: 
+- Intel(R) Xeon(R) Gold 6248R CPU @ 3.00GHz
+- L1d cache: 1.5MB
+- L1i cache: 1.5MB
+- L2 cache: 48MB
+- L3 cache: 71.5MB
+- Supports SSE, AVX2, AVX512
+
+Requirements:
+1. Optimize the function for better single-threaded performance
+2. Maintain exact functional equivalence
+3. Use appropriate compiler intrinsics and optimizations
+4. Focus on the most impactful optimizations for this specific function
+5. Only use variables, constants, and types that are already available in the function scope
+6. Do not define any constants, macros, or types that would need to be defined outside the function body
+
+Output format:
+You should only output the optimized function implementation which follows the exact function signature as follows: 
+```cpp
+void transpose_optimized(double *transpose_x, double *transpose_output, 
+                int batch_size, int input_h, int input_w, int dim0, int dim1)
+```
+
+Do not include any other text other than the optimized function implementation. ONLY output the optimized function implementation within the code block.

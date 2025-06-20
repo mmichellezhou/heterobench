@@ -10,9 +10,9 @@
     },
     "performance_analysis": {
       "verification_success": false,
-      "original_time": 2.73507,
-      "optimized_time": 1.5809,
-      "speedup": 1.73007,
+      "original_time": 2.97433,
+      "optimized_time": 1.55938,
+      "speedup": 1.90737,
       "build_success": true
     },
     "overall_status": {
@@ -21,6 +21,6 @@
       "build_success": true,
       "verification_success": false
     },
-    "speedup": 1.73007
+    "speedup": 1.90737
   }
 }

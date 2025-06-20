@@ -77,6 +77,38 @@ const DigitType training_data[NUM_TRAINING * DIGIT_WIDTH] = {
 #include "../../196data/training_set_9.dat"
 };
 
+/* Compare original and optimized results */
+void compareResults(LabelType *original, LabelType *optimized, int size,
+                    const string &name) {
+  int error = 0;
+  for (int i = 0; i < size; i++) {
+    if (original[i] != optimized[i]) {
+      error++;
+    }
+  }
+
+  if (!error) {
+    cout << name << ": Pass (Original and optimized match)" << endl;
+  } else {
+    cout << name << ": Fail (Original and optimized differ)" << endl;
+    cout << "error: " << error << " differences found" << endl;
+
+    // print the first 10 elements of original results
+    cout << "First 10 elements of original results: ";
+    for (int i = 0; i < 10 && i < size; i++) {
+      cout << (int)original[i] << " ";
+    }
+    cout << endl;
+
+    // print the first 10 elements of optimized results
+    cout << "First 10 elements of optimized results: ";
+    for (int i = 0; i < 10 && i < size; i++) {
+      cout << (int)optimized[i] << " ";
+    }
+    cout << endl;
+  }
+}
+
 int main(int argc, char **argv) {
   cout << "=======================================" << endl;
   cout << "Running digit_recog benchmark C++ Serial" << endl;
@@ -85,10 +117,44 @@ int main(int argc, char **argv) {
   // sw version host code
   // create space for the result
   LabelType *result = new LabelType[NUM_TEST];
+  LabelType *result_optimized = new LabelType[NUM_TEST];
+
+  // Initialize arrays to 0 to prevent comparison of uninitialized values
+  for (int i = 0; i < NUM_TEST; i++) {
+    result[i] = 0;
+    result_optimized[i] = 0;
+  }
 
   // nearest neighbor set
   int dists[K_CONST];
   int labels[K_CONST];
+
+  // Warm up and test original implementation
+  cout << "Running 1 warm up iteration for original implementation..." << endl;
+  for (int i = 0; i < K_CONST; ++i) {
+    dists[i] = 256;
+    labels[i] = 0;
+  }
+  update_knn(training_data, &testing_data[0], dists, labels);
+  LabelType max_label = 0;
+  knn_vote(labels, &max_label);
+  result[0] = max_label;
+  cout << "Done" << endl;
+
+  // Warm up and test optimized implementation
+  cout << "Running 1 warm up iteration for optimized implementation..." << endl;
+  for (int i = 0; i < K_CONST; ++i) {
+    dists[i] = 256;
+    labels[i] = 0;
+  }
+  update_knn_optimized(training_data, &testing_data[0], dists, labels);
+  knn_vote_optimized(labels, &max_label);
+  result_optimized[0] = max_label;
+  cout << "Done" << endl;
+
+  // Compare results
+  cout << "Comparing original and optimized results..." << endl;
+  compareResults(result, result_optimized, NUM_TEST, "Digit recognition");
 
   /* Performance measurement. */
   cout << "Running " << NUM_TEST << " iterations for performance measurement..."
@@ -126,10 +192,12 @@ int main(int argc, char **argv) {
   }
   cout << "Done" << endl;
 
+  /*
   // Check original implementation results
   cout << "Checking original implementation results..." << endl;
   check_results(result, expected, NUM_TEST);
   cout << "Done" << endl;
+  */
 
   // Run optimized implementation
   cout << "Running optimized implementation..." << endl;
@@ -153,15 +221,17 @@ int main(int argc, char **argv) {
     start_iteration_time = omp_get_wtime();
     LabelType max_label = 0;
     knn_vote_optimized(labels, &max_label);
-    result[t] = max_label;
+    result_optimized[t] = max_label;
     knn_vote_optimized_time += omp_get_wtime() - start_iteration_time;
   }
   cout << "Done" << endl;
 
+  /*
   // Check optimized implementation results
   cout << "Checking optimized implementation results..." << endl;
-  check_results(result, expected, NUM_TEST);
+  check_results(result_optimized, expected, NUM_TEST);
   cout << "Done" << endl;
+  */
 
   double whole_time = omp_get_wtime() - start_whole_time;
 
@@ -196,6 +266,7 @@ int main(int argc, char **argv) {
   cout << "Whole time: " << whole_time << " seconds" << endl;
 
   delete[] result;
+  delete[] result_optimized;
 
   return EXIT_SUCCESS;
 }

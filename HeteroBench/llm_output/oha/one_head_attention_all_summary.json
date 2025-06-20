@@ -1,0 +1,11 @@
+{
+  "matmul": {
+    "function_generation_success": true
+  },
+  "softmax": {
+    "function_generation_success": true
+  },
+  "transpose": {
+    "function_generation_success": true
+  }
+}

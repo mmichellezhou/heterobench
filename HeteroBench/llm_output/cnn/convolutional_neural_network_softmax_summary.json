@@ -1,0 +1,47 @@
+{
+  "function_name": "softmax",
+  "original_file_path": "benchmarks/convolutional_neural_network/homobackend_cpu/Cpp/cpu_impl/softmax.cpp",
+  "optimized_file_path": "benchmarks/convolutional_neural_network/homobackend_cpu/Cpp/cpu_impl_optimized/softmax_optimized.cpp",
+  "status": {
+    "function_generation_success": true,
+    "compilation_success": false,
+    "execution_success": false,
+    "verification_success": false
+  },
+  "statistics": {
+    "num_code_blocks_generated": 1,
+    "optimized_code_length": 3662,
+    "prompt_length": 3752,
+    "llm_response_length": 3673
+  },
+  "details": {
+    "entire_llm_response": {
+      "model": "gemini-2.5-flash-preview-05-20",
+      "provider": "google",
+      "temperature": 0.0,
+      "max_tokens": 65536,
+      "response": {
+        "id": "cwNVaIn9Ccmk1MkPwqLckAU",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "```cpp\nvoid softmax_optimized(double *softmax_input, double *exp_results, double *softmax_output, int size)\n{\n  // Accumulators for sum_total_0 to enable instruction-level parallelism\n  // by breaking the data dependency chain for the sum.\n  double sum_total_0_part0 = 0.0;\n  double sum_total_0_part1 = 0.0;\n  double sum_total_0_part2 = 0.0;\n  double sum_total_0_part3 = 0.0;\n  double sum_total_0_part4 = 0.0;\n  double sum_total_0_part5 = 0.0;\n  double sum_total_0_part6 = 0.0;\n  double sum_total_0_part7 = 0.0;\n\n  int i = 0;\n  // Calculate limit for the main unrolled loop.\n  // Using an unroll factor of 8 to reduce loop overhead and expose Instruction-Level Parallelism (ILP)\n  // for the expensive `exp` function calls and subsequent additions.\n  int limit = size - (size % 8);\n\n  // First loop: calculate exp(softmax_input[i]) and accumulate sum_total_0.\n  // Loop unrolling and register optimization are applied here.\n  for (; i < limit; i += 8) {\n    // Compute exp for 8 elements. These operations can potentially execute in parallel\n    // on modern CPUs due to multiple floating-point execution units.\n    double val0 = exp(softmax_input[i]);\n    double val1 = exp(softmax_input[i+1]);\n    double val2 = exp(softmax_input[i+2]);\n    double val3 = exp(softmax_input[i+3]);\n    double val4 = exp(softmax_input[i+4]);\n    double val5 = exp(softmax_input[i+5]);\n    double val6 = exp(softmax_input[i+6]);\n    double val7 = exp(softmax_input[i+7]);\n\n    // Store results into exp_results array.\n    exp_results[i] = val0;\n    exp_results[i+1] = val1;\n    exp_results[i+2] = val2;\n    exp_results[i+3] = val3;\n    exp_results[i+4] = val4;\n    exp_results[i+5] = val5;\n    exp_results[i+6] = val6;\n    exp_results[i+7] = val7;\n\n    // Accumulate sums into separate registers. This allows the additions to proceed\n    // in parallel, reducing the critical path latency of the sum reduction.\n    sum_total_0_part0 += val0;\n    sum_total_0_part1 += val1;\n    sum_total_0_part2 += val2;\n    sum_total_0_part3 += val3;\n    sum_total_0_part4 += val4;\n    sum_total_0_part5 += val5;\n    sum_total_0_part6 += val6;\n    sum_total_0_part7 += val7;\n  }\n\n  // Combine the partial sums from the unrolled loop.\n  double sum_total_0 = sum_total_0_part0 + sum_total_0_part1 + sum_total_0_part2 + sum_total_0_part3 +\n                       sum_total_0_part4 + sum_total_0_part5 + sum_total_0_part6 + sum_total_0_part7;\n\n  // Handle any remaining elements that did not fit into the unrolled loop (remainder loop).\n  for (; i < size; i++) {\n    exp_results[i] = exp(softmax_input[i]);\n    sum_total_0 += exp_results[i];\n  }\n\n  // Second loop: calculate softmax_output.\n  // Apply strength reduction: replace division by a multiplication with the reciprocal.\n  // This moves the expensive division operation outside the loop.\n  double inv_sum_total_0 = 1.0 / sum_total_0;\n\n  // Reset loop index for the second loop.\n  i = 0;\n  // Apply loop unrolling by 8 for the division part as well, similar to the first loop.\n  for (; i < limit; i += 8) {\n    softmax_output[i] = exp_results[i] * inv_sum_total_0;\n    softmax_output[i+1] = exp_results[i+1] * inv_sum_total_0;\n    softmax_output[i+2] = exp_results[i+2] * inv_sum_total_0;\n    softmax_output[i+3] = exp_results[i+3] * inv_sum_total_0;\n    softmax_output[i+4] = exp_results[i+4] * inv_sum_total_0;\n    softmax_output[i+5] = exp_results[i+5] * inv_sum_total_0;\n    softmax_output[i+6] = exp_results[i+6] * inv_sum_total_0;\n    softmax_output[i+7] = exp_results[i+7] * inv_sum_total_0;\n  }\n\n  // Handle any remaining elements for the second loop.\n  for (; i < size; i++) {\n    softmax_output[i] = exp_results[i] * inv_sum_total_0;\n  }\n}\n```",
+              "function_call": null,
+              "tool_calls": null
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "created": 1750401907,
+        "model": "gemini-2.5-flash-preview-05-20",
+        "usage": {
+          "prompt_tokens": 995,
+          "completion_tokens": 1302,
+          "total_tokens": 9454
+        }
+      }
+    }
+  }
+}

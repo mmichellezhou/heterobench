@@ -1,5 +1,68 @@
 #include "cpu_impl.h"
 
 void compute_gradient_magnitude_optimized(const double *sobel_x, const double *sobel_y, int height, int width, double *gradient_magnitude) {
-    compute_gradient_magnitude(sobel_x, sobel_y, height, width, gradient_magnitude);
+    // Calculate the total number of elements. Using long long for N and the loop counter
+    // prevents potential integer overflow for very large images (height * width).
+    const long long N = (long long)height * width;
+
+    // Define the unroll factor. A factor of 4 is chosen to reduce loop overhead
+    // and expose Instruction-Level Parallelism (ILP) by allowing the CPU to
+    // execute multiple independent operations concurrently. This balances
+    // performance gains with increased code size and potential register pressure.
+    const int UNROLL_FACTOR = 4;
+
+    long long i = 0;
+
+    // Main loop: Process elements in chunks of UNROLL_FACTOR.
+    // This loop structure reduces the number of loop control instructions (branch, increment)
+    // and allows the compiler to schedule independent computations more effectively.
+    for (; i + UNROLL_FACTOR <= N; i += UNROLL_FACTOR) {
+        // Explicit prefetching:
+        // These intrinsics hint to the CPU's hardware prefetcher to bring data
+        // from memory into the cache hierarchy earlier. This can help hide
+        // memory access latency, especially if the data is not already in L1/L2 cache.
+        // We prefetch data for the block that is UNROLL_FACTOR * 2 elements ahead.
+        // '0' indicates a read prefetch (for sobel_x and sobel_y).
+        // '1' indicates a write prefetch (for gradient_magnitude).
+        // '3' indicates a high degree of temporal locality (data is likely to be used soon).
+        // While hardware prefetchers are often effective for sequential access,
+        // explicit prefetching can sometimes provide an additional boost by
+        // giving the prefetcher more lead time.
+        __builtin_prefetch(sobel_x + i + UNROLL_FACTOR * 2, 0, 3);
+        __builtin_prefetch(sobel_y + i + UNROLL_FACTOR * 2, 0, 3);
+        __builtin_prefetch(gradient_magnitude + i + UNROLL_FACTOR * 2, 1, 3);
+
+        // Process UNROLL_FACTOR (4) elements within this single loop iteration.
+        // Each set of calculations (two multiplications, one addition, one square root)
+        // is independent of the others within this block. This allows the CPU to
+        // exploit Instruction-Level Parallelism (ILP) by executing these operations
+        // on different functional units or pipelining them.
+
+        // Element i
+        double sx0 = sobel_x[i];
+        double sy0 = sobel_y[i];
+        gradient_magnitude[i] = sqrt(sx0 * sx0 + sy0 * sy0);
+
+        // Element i + 1
+        double sx1 = sobel_x[i + 1];
+        double sy1 = sobel_y[i + 1];
+        gradient_magnitude[i + 1] = sqrt(sx1 * sx1 + sy1 * sy1);
+
+        // Element i + 2
+        double sx2 = sobel_x[i + 2];
+        double sy2 = sobel_y[i + 2];
+        gradient_magnitude[i + 2] = sqrt(sx2 * sx2 + sy2 * sy2);
+
+        // Element i + 3
+        double sx3 = sobel_x[i + 3];
+        double sy3 = sobel_y[i + 3];
+        gradient_magnitude[i + 3] = sqrt(sx3 * sx3 + sy3 * sy3);
+    }
+
+    // Remainder loop: Handle any remaining elements that did not fit into the
+    // unrolled loop (i.e., N is not a perfect multiple of UNROLL_FACTOR).
+    // This ensures that all elements are processed and maintains functional equivalence.
+    for (; i < N; ++i) {
+        gradient_magnitude[i] = sqrt(sobel_x[i] * sobel_x[i] + sobel_y[i] * sobel_y[i]);
+    }
 }

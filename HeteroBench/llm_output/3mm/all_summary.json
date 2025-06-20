@@ -12,18 +12,18 @@
       }
     },
     "performance_analysis": {
-      "verification_success": false,
-      "original_time": 15.4334,
-      "optimized_time": 7.33607,
-      "speedup": 2.10377,
+      "verification_success": true,
+      "original_time": 15.4452,
+      "optimized_time": 7.24367,
+      "speedup": 2.13224,
       "build_success": true
     },
     "overall_status": {
       "functions_processed": 3,
       "functions_successful": 3,
       "build_success": true,
-      "verification_success": false
+      "verification_success": true
     },
-    "speedup": 2.10377
+    "speedup": 2.13224
   }
 }

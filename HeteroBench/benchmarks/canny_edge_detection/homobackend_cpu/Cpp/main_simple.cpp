@@ -21,6 +21,7 @@
  */
 
 #include "cpu_impl.h"
+#include "cpu_impl_optimized/include/cpu_impl_optimized.h"
 #include "omp.h"
 
 #include "cpu_impl_optimized.h"
@@ -39,29 +40,29 @@ struct Image {
   int width;
   int height;
   int channels;
-  std::vector<unsigned char> data;
+  vector<unsigned char> data;
 
   Image(int w, int h, int c)
       : width(w), height(h), channels(c), data(w * h * c) {}
 };
 
-Image imread(const std::string &filename) {
+Image imread(const string &filename) {
   int width, height, channels;
   unsigned char *data =
       stbi_load(filename.c_str(), &width, &height, &channels, 0);
   if (!data) {
-    std::cerr << "Error: could not load image " << filename << std::endl;
+    cerr << "Error: could not load image " << filename << endl;
     exit(1);
   }
   Image img(width, height, channels);
-  std::copy(data, data + width * height * channels, img.data.begin());
+  copy(data, data + width * height * channels, img.data.begin());
   stbi_image_free(data);
   return img;
 }
 
 Image cvtColor(const Image &src) {
   if (src.channels != 3) {
-    std::cerr << "Error: only 3-channel BGR images are supported" << std::endl;
+    cerr << "Error: only 3-channel BGR images are supported" << endl;
     exit(1);
   }
   Image gray(src.width, src.height, 1);
@@ -78,32 +79,92 @@ Image cvtColor(const Image &src) {
   return gray;
 }
 
-void imwrite(const std::string &filename, const Image &img) {
+void imwrite(const string &filename, const Image &img) {
   if (stbi_write_png(filename.c_str(), img.width, img.height, img.channels,
                      img.data.data(), img.width * img.channels) == 0) {
-    std::cerr << "Error: could not write image " << filename << std::endl;
+    cerr << "Error: could not write image " << filename << endl;
     exit(1);
   }
 }
 
-int main(int argc, char **argv) {
-  std::cout << "=======================================" << std::endl;
-  std::cout << "Running ced benchmark C++ Serial" << std::endl;
-  std::cout << "=======================================" << std::endl;
+/* Compare original and optimized results */
+void compareResults(void *original, void *optimized, size_t size,
+                    const string &name, bool is_double = false) {
+  int error = 0;
+  if (is_double) {
+    double *orig = static_cast<double *>(original);
+    double *opt = static_cast<double *>(optimized);
+    for (int i = 0; i < size; i++) {
+      if (abs(orig[i] - opt[i]) > 1e-10) {
+        error++;
+      }
+    }
+  } else {
+    uint8_t *orig = static_cast<uint8_t *>(original);
+    uint8_t *opt = static_cast<uint8_t *>(optimized);
+    for (int i = 0; i < size; i++) {
+      if (orig[i] != opt[i]) {
+        error++;
+      }
+    }
+  }
 
-  std::string input_image_path;
-  std::string output_image_path;
+  if (!error) {
+    cout << name << ": Pass (Original and optimized match)" << endl;
+  } else {
+    cout << name << ": Fail (Original and optimized differ)" << endl;
+    cout << "error: " << error << " differences found" << endl;
+
+    // print the first 10 elements of original results
+    cout << "First 10 elements of original results: ";
+    if (is_double) {
+      double *orig = static_cast<double *>(original);
+      for (int i = 0; i < 10 && i < size; i++) {
+        cout << orig[i] << " ";
+      }
+    } else {
+      uint8_t *orig = static_cast<uint8_t *>(original);
+      for (int i = 0; i < 10 && i < size; i++) {
+        cout << (int)orig[i] << " ";
+      }
+    }
+    cout << endl;
+
+    // print the first 10 elements of optimized results
+    cout << "First 10 elements of optimized results: ";
+    if (is_double) {
+      double *opt = static_cast<double *>(optimized);
+      for (int i = 0; i < 10 && i < size; i++) {
+        cout << opt[i] << " ";
+      }
+    } else {
+      uint8_t *opt = static_cast<uint8_t *>(optimized);
+      for (int i = 0; i < 10 && i < size; i++) {
+        cout << (int)opt[i] << " ";
+      }
+    }
+    cout << endl;
+  }
+}
+
+int main(int argc, char **argv) {
+  cout << "=======================================" << endl;
+  cout << "Running ced benchmark C++ Serial" << endl;
+  cout << "=======================================" << endl;
+
+  string input_image_path;
+  string output_image_path;
   int low_threshold;
   int high_threshold;
   if (argc == 5) {
     input_image_path = argv[1];
     output_image_path = argv[2];
-    low_threshold = std::stoi(argv[3]);
-    high_threshold = std::stoi(argv[4]);
+    low_threshold = stoi(argv[3]);
+    high_threshold = stoi(argv[4]);
   } else {
-    std::cerr << "Usage: ./ced <input_image> <output_image> <low_threshold> "
+    cerr << "Usage: ./ced <input_image> <output_image> <low_threshold> "
                  "<high_threshold>"
-              << std::endl;
+              << endl;
     exit(-1);
   }
 
@@ -113,6 +174,7 @@ int main(int argc, char **argv) {
   int width = gray_image.width;
   int height = gray_image.height;
   Image canny_image(width, height, 1);
+  Image canny_image_optimized(width, height, 1);
 
   uint64_t image_size = height * width;
 
@@ -121,10 +183,15 @@ int main(int argc, char **argv) {
   uint8_t *gradient_direction = new uint8_t[image_size];
   double *suppressed_output = new double[image_size];
   uint8_t *double_thresh_output = new uint8_t[image_size];
+  uint8_t *gaussian_filter_output_optimized = new uint8_t[image_size];
+  double *gradient_intensity_optimized = new double[image_size];
+  uint8_t *gradient_direction_optimized = new uint8_t[image_size];
+  double *suppressed_output_optimized = new double[image_size];
+  uint8_t *double_thresh_output_optimized = new uint8_t[image_size];
 
   // Warm up and test original implementation
-  std::cout << "Running 1 warm up iteration for original implementation..."
-            << std::endl;
+  cout << "Running 1 warm up iteration for original implementation..."
+            << endl;
   gaussian_filter(gray_image.data.data(), height, width,
                   gaussian_filter_output);
   gradient_intensity_direction(gaussian_filter_output, height, width,
@@ -134,24 +201,27 @@ int main(int argc, char **argv) {
   double_thresholding(suppressed_output, height, width, high_threshold,
                       low_threshold, double_thresh_output);
   hysteresis(double_thresh_output, height, width, canny_image.data.data());
-  std::cout << "Done" << std::endl;
-
+  cout << "Done" << endl;
+  
   // Warm up and test optimized implementation
-  std::cout << "Running 1 warm up iteration for optimized implementation..."
-            << std::endl;
-  gaussian_filter_optimized(gray_image.data.data(), height, width,
-                            gaussian_filter_output);
-  gradient_intensity_direction_optimized(gaussian_filter_output, height, width,
-                                         gradient_intensity,
-                                         gradient_direction);
-  edge_thinning_optimized(gradient_intensity, gradient_direction, height, width,
-                          suppressed_output);
-  double_thresholding_optimized(suppressed_output, height, width,
-                                high_threshold, low_threshold,
-                                double_thresh_output);
-  hysteresis_optimized(double_thresh_output, height, width,
-                       canny_image.data.data());
-  std::cout << "Done" << std::endl;
+  cout << "Running 1 warm up iteration for optimized implementation..." << endl;
+  gaussian_filter(gray_image.data.data(), height, width, gaussian_filter_output_optimized);
+  gradient_intensity_direction(gaussian_filter_output_optimized, height, width,
+                               gradient_intensity_optimized, gradient_direction_optimized);
+  edge_thinning(gradient_intensity_optimized, gradient_direction_optimized, height, width,
+                      suppressed_output_optimized);
+  double_thresholding(suppressed_output_optimized, height, width, high_threshold, low_threshold,
+               double_thresh_output_optimized);
+  hysteresis(double_thresh_output_optimized, height, width, canny_image_optimized.data.data());
+  cout << "Done" << endl;
+
+  // Compare results
+  cout << "Comparing original and optimized results..." << endl;
+  compareResults(gaussian_filter_output, gaussian_filter_output_optimized, image_size, "gaussian_filter");
+  compareResults(gradient_intensity, gradient_intensity_optimized, image_size, "gradient_intensity_direction");
+  compareResults(suppressed_output, suppressed_output_optimized, image_size, "edge_thinning");
+  compareResults(double_thresh_output, double_thresh_output_optimized, image_size, "double_thresholding");
+  compareResults(canny_image.data.data(), canny_image_optimized.data.data(), image_size, "hysteresis");
 
   /* Performance measurements. */
   int iterations = ITERATIONS;
@@ -198,39 +268,39 @@ int main(int argc, char **argv) {
     hysteresis(double_thresh_output, height, width, canny_image.data.data());
     hysteresis_time += omp_get_wtime() - start_iteration_time;
   }
-  std::cout << "Done" << std::endl;
+  cout << "Done" << endl;
 
   // Run optimized implementation
   cout << "Running optimized implementation..." << endl;
   for (int i = 0; i < iterations; i++) {
     start_iteration_time = omp_get_wtime();
     gaussian_filter_optimized(gray_image.data.data(), height, width,
-                              gaussian_filter_output);
+                              gaussian_filter_output_optimized);
     gaussian_filter_time_optimized += omp_get_wtime() - start_iteration_time;
 
     start_iteration_time = omp_get_wtime();
-    gradient_intensity_direction_optimized(gaussian_filter_output, height,
-                                           width, gradient_intensity,
-                                           gradient_direction);
+    gradient_intensity_direction_optimized(gaussian_filter_output_optimized, height,
+                                           width, gradient_intensity_optimized,
+                                           gradient_direction_optimized);
     gradient_time_optimized += omp_get_wtime() - start_iteration_time;
 
     start_iteration_time = omp_get_wtime();
-    edge_thinning_optimized(gradient_intensity, gradient_direction, height,
-                            width, suppressed_output);
+    edge_thinning_optimized(gradient_intensity_optimized, gradient_direction_optimized, height,
+                            width, suppressed_output_optimized);
     supp_time_optimized += omp_get_wtime() - start_iteration_time;
 
     start_iteration_time = omp_get_wtime();
-    double_thresholding_optimized(suppressed_output, height, width,
+    double_thresholding_optimized(suppressed_output_optimized, height, width,
                                   high_threshold, low_threshold,
-                                  double_thresh_output);
+                                  double_thresh_output_optimized);
     threshold_time_optimized += omp_get_wtime() - start_iteration_time;
 
     start_iteration_time = omp_get_wtime();
-    hysteresis_optimized(double_thresh_output, height, width,
-                         canny_image.data.data());
+    hysteresis_optimized(double_thresh_output_optimized, height, width,
+                         canny_image_optimized.data.data());
     hysteresis_time_optimized += omp_get_wtime() - start_iteration_time;
   }
-  std::cout << "Done" << std::endl;
+  cout << "Done" << endl;
 
   double whole_time = omp_get_wtime() - start_whole_time;
 

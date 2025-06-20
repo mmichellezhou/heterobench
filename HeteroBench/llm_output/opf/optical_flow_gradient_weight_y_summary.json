@@ -1,0 +1,47 @@
+{
+  "function_name": "gradient_weight_y",
+  "original_file_path": "benchmarks/optical_flow/homobackend_cpu/Cpp/cpu_impl/gradient_weight_y.cpp",
+  "optimized_file_path": "benchmarks/optical_flow/homobackend_cpu/Cpp/cpu_impl_optimized/gradient_weight_y_optimized.cpp",
+  "status": {
+    "function_generation_success": true,
+    "compilation_success": false,
+    "execution_success": false,
+    "verification_success": false
+  },
+  "statistics": {
+    "num_code_blocks_generated": 1,
+    "optimized_code_length": 5729,
+    "prompt_length": 4847,
+    "llm_response_length": 5740
+  },
+  "details": {
+    "entire_llm_response": {
+      "model": "gemini-2.5-flash-preview-05-20",
+      "provider": "google",
+      "temperature": 0.0,
+      "max_tokens": 65536,
+      "response": {
+        "id": "sgZVaNepFcziugfoie6gBQ",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "```cpp\nvoid gradient_weight_y_optimized(pixel_t gradient_x[MAX_HEIGHT][MAX_WIDTH],\n                       pixel_t gradient_y[MAX_HEIGHT][MAX_WIDTH],\n                       pixel_t gradient_z[MAX_HEIGHT][MAX_WIDTH],\n                       gradient_t filt_grad[MAX_HEIGHT][MAX_WIDTH])\n{\n  // Optimize by changing the loop order to iterate over columns first.\n  // This allows for sequential memory access within each column for the vertical filter,\n  // which significantly improves cache locality (stride-1 access for input data).\n  // A sliding window approach is used for each column to reuse loaded data.\n  for (int c = 0; c < MAX_WIDTH; ++c)\n  {\n    // Declare and initialize sliding window buffers for 7 rows of pixel data.\n    // These arrays are small (7 elements each) and will likely reside in CPU registers\n    // or L1 cache, minimizing memory access latency for the filter computation.\n    pixel_t window_x[7];\n    pixel_t window_y[7];\n    pixel_t window_z[7];\n\n    // Pre-fill the sliding window with the first 7 rows for the current column 'c'.\n    // These are gradient_x[0][c] through gradient_x[6][c].\n    // This prepares the window for the first actual computation, which occurs when\n    // the original 'r' index is 6 (corresponding to output row 3).\n    for (int i = 0; i < 7; ++i) {\n        window_x[i] = gradient_x[i][c];\n        window_y[i] = gradient_y[i][c];\n        window_z[i] = gradient_z[i][c];\n    }\n\n    // Handle the top border region where the output gradient is zero.\n    // In the original code, this corresponds to 'r' values 3, 4, 5,\n    // which write to filt_grad rows 0, 1, 2 respectively.\n    // This loop explicitly sets these output rows to zero, removing conditional branches\n    // from the main computation loop.\n    for (int r_out = 0; r_out < 3; ++r_out) {\n        filt_grad[r_out][c] = {0,0,0};\n    }\n\n    // Main computation loop.\n    // 'r_in' corresponds to the 'r' index in the original code's computation block\n    // (i.e., where 'r >= 6 && r < MAX_HEIGHT').\n    // So, 'r_in' ranges from 6 to MAX_HEIGHT - 1.\n    // The output row for filt_grad is 'r_in - 3'.\n    for (int r_in = 6; r_in < MAX_HEIGHT; ++r_in)\n    {\n      // Accumulators for the current output pixel's x, y, and z components.\n      // Using float directly for accumulators, assuming pixel_t and gradient_t\n      // components are compatible with float for optimal floating-point performance.\n      float acc_x = 0.0f;\n      float acc_y = 0.0f;\n      float acc_z = 0.0f;\n\n      // Unroll the 7-tap filter loop completely.\n      // This eliminates loop overhead and exposes maximum instruction-level parallelism\n      // for the compiler to schedule the multiply-add operations.\n      // The filter applies GRAD_FILTER[i] to window_x[6-i].\n      // window_x[6] holds gradient_x[r_in][c], window_x[0] holds gradient_x[r_in-6][c].\n      acc_x += window_x[6] * GRAD_FILTER[0];\n      acc_y += window_y[6] * GRAD_FILTER[0];\n      acc_z += window_z[6] * GRAD_FILTER[0];\n\n      acc_x += window_x[5] * GRAD_FILTER[1];\n      acc_y += window_y[5] * GRAD_FILTER[1];\n      acc_z += window_z[5] * GRAD_FILTER[1];\n\n      acc_x += window_x[4] * GRAD_FILTER[2];\n      acc_y += window_y[4] * GRAD_FILTER[2];\n      acc_z += window_z[4] * GRAD_FILTER[2];\n\n      acc_x += window_x[3] * GRAD_FILTER[3];\n      acc_y += window_y[3] * GRAD_FILTER[3];\n      acc_z += window_z[3] * GRAD_FILTER[3];\n\n      acc_x += window_x[2] * GRAD_FILTER[4];\n      acc_y += window_y[2] * GRAD_FILTER[4];\n      acc_z += window_z[2] * GRAD_FILTER[4];\n\n      acc_x += window_x[1] * GRAD_FILTER[5];\n      acc_y += window_y[1] * GRAD_FILTER[5];\n      acc_z += window_z[1] * GRAD_FILTER[5];\n\n      acc_x += window_x[0] * GRAD_FILTER[6];\n      acc_y += window_y[0] * GRAD_FILTER[6];\n      acc_z += window_z[0] * GRAD_FILTER[6];\n\n      // Store the computed gradient into the output array.\n      // The output row is r_in - 3.\n      filt_grad[r_in-3][c] = {acc_x, acc_y, acc_z};\n\n      // Slide the window for the next iteration.\n      // This involves shifting existing elements and loading one new element.\n      // This update is only performed if there's a valid next row to read from the input arrays.\n      // The last valid read for gradient_x[r_in+1][c] is when r_in+1 = MAX_HEIGHT-1,\n      // meaning r_in = MAX_HEIGHT-2. So, if r_in is MAX_HEIGHT-1, we don't update.\n      if (r_in < MAX_HEIGHT - 1) {\n          // Unroll the window shift operations for better ILP.\n          window_x[0] = window_x[1];\n          window_x[1] = window_x[2];\n          window_x[2] = window_x[3];\n          window_x[3] = window_x[4];\n          window_x[4] = window_x[5];\n          window_x[5] = window_x[6];\n          window_x[6] = gradient_x[r_in+1][c]; // Load new element\n\n          window_y[0] = window_y[1];\n          window_y[1] = window_y[2];\n          window_y[2] = window_y[3];\n          window_y[3] = window_y[4];\n          window_y[4] = window_y[5];\n          window_y[5] = window_y[6];\n          window_y[6] = gradient_y[r_in+1][c];\n\n          window_z[0] = window_z[1];\n          window_z[1] = window_z[2];\n          window_z[2] = window_z[3];\n          window_z[3] = window_z[4];\n          window_z[4] = window_z[5];\n          window_z[5] = window_z[6];\n          window_z[6] = gradient_z[r_in+1][c];\n      }\n    }\n\n    // Handle the bottom border region where the output gradient is zero.\n    // In the original code, this corresponds to 'r' values MAX_HEIGHT, MAX_HEIGHT+1, MAX_HEIGHT+2,\n    // which write to filt_grad rows MAX_HEIGHT-3, MAX_HEIGHT-2, MAX_HEIGHT-1 respectively.\n    // This loop explicitly sets these output rows to zero.\n    for (int r_out = MAX_HEIGHT - 3; r_out < MAX_HEIGHT; ++r_out) {\n        filt_grad[r_out][c] = {0,0,0};\n    }\n  }\n}\n```",
+              "function_call": null,
+              "tool_calls": null
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "created": 1750402738,
+        "model": "gemini-2.5-flash-preview-05-20",
+        "usage": {
+          "prompt_tokens": 1389,
+          "completion_tokens": 1942,
+          "total_tokens": 17168
+        }
+      }
+    }
+  }
+}

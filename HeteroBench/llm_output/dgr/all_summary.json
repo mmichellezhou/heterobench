@@ -1,0 +1,29 @@
+{
+  "digit_recog": {
+    "function_results": {
+      "knn_vote": {
+        "function_generation_success": true
+      },
+      "popcount": {
+        "function_generation_success": true
+      },
+      "update_knn": {
+        "function_generation_success": true
+      }
+    },
+    "performance_analysis": {
+      "verification_success": true,
+      "original_time": 0.000756096,
+      "optimized_time": 0.000350075,
+      "speedup": 2.15981,
+      "build_success": true
+    },
+    "overall_status": {
+      "functions_processed": 3,
+      "functions_successful": 3,
+      "build_success": true,
+      "verification_success": true
+    },
+    "speedup": 2.15981
+  }
+}

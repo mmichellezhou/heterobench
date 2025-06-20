@@ -1,0 +1,11 @@
+{
+  "compute_gradient_magnitude": {
+    "function_generation_success": true
+  },
+  "sobel_filter_x": {
+    "function_generation_success": true
+  },
+  "sobel_filter_y": {
+    "function_generation_success": true
+  }
+}
