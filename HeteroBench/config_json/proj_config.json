@@ -11,12 +11,20 @@
                 "iteration_times": 1
             },
             "source": "main.cpp",
+            "source_simple": "main_simple.cpp",
             "krnl_sources": [
                 "gaussian_filter.cpp",
                 "gradient_intensity_direction.cpp",
                 "edge_thinning.cpp",
                 "double_thresholding.cpp",
                 "hysteresis.cpp"
+            ],
+            "krnl_sources_opt": [
+                "gaussian_filter_optimized.cpp",
+                "gradient_intensity_direction_optimized.cpp",
+                "edge_thinning_optimized.cpp",
+                "double_thresholding_optimized.cpp",
+                "hysteresis_optimized.cpp"
             ],
 
             "gpu_brand": "nvidia",
@@ -36,6 +44,7 @@
                 "iteration_times": 1
             },
             "source": "main.cpp",
+            "source_simple": "main_simple.cpp",
             "krnl_sources": [
                 "gradient_xy_calc.cpp",
                 "gradient_z_calc.cpp",
@@ -46,7 +55,17 @@
                 "tensor_weight_x.cpp",
                 "flow_calc.cpp"
             ],
-            
+            "krnl_sources_opt": [
+                "gradient_xy_calc_optimized.cpp",
+                "gradient_z_calc_optimized.cpp",
+                "gradient_weight_y_optimized.cpp",
+                "gradient_weight_x_optimized.cpp",
+                "outer_product_optimized.cpp",
+                "tensor_weight_y_optimized.cpp",
+                "tensor_weight_x_optimized.cpp",
+                "flow_calc_optimized.cpp"
+            ],
+
             "gpu_brand": "nvidia",
             "gpu_arch": "",
             
@@ -62,12 +81,18 @@
                 "iteration_times": 1
             },
             "source": "main.cpp",
+            "source_simple": "main_simple.cpp",
             "krnl_sources": [
                 "compute_gradient_magnitude.cpp",
                 "sobel_filter_x.cpp",
                 "sobel_filter_y.cpp"
             ],
-            
+            "krnl_sources_opt": [
+                "compute_gradient_magnitude_optimized.cpp",
+                "sobel_filter_x_optimized.cpp",
+                "sobel_filter_y_optimized.cpp"
+            ],
+
             "gpu_brand": "nvidia",
             "gpu_arch": "",
             
@@ -93,6 +118,7 @@
                 "full_connect_layer_size_w": 2048
             },
             "source": "main.cpp",
+            "source_simple": "main_simple.cpp",
             "krnl_sources": [
                 "conv2d.cpp",
                 "relu.cpp",
@@ -101,7 +127,15 @@
                 "dot_add.cpp",
                 "softmax.cpp"
             ],
-            
+            "krnl_sources_opt": [
+                "conv2d_optimized.cpp",
+                "relu_optimized.cpp",
+                "max_pooling_optimized.cpp",
+                "pad_input_optimized.cpp",
+                "dot_add_optimized.cpp",
+                "softmax_optimized.cpp"
+            ],
+
             "gpu_brand": "nvidia",
             "gpu_arch": "",
             
@@ -129,10 +163,16 @@
                 "layer3_w2": 1024
             },
             "source": "main.cpp",
+            "source_simple": "main_simple.cpp",
             "krnl_sources": [
                 "dot_add.cpp",
                 "sigmoid.cpp",
                 "softmax.cpp"
+            ],
+            "krnl_sources_opt": [
+                "dot_add_optimized.cpp",
+                "sigmoid_optimized.cpp",
+                "softmax_optimized.cpp"
             ],
             
             "gpu_brand": "nvidia",
@@ -153,10 +193,16 @@
                 "d": 128
             },
             "source": "main.cpp",
+            "source_simple": "main_simple.cpp",
             "krnl_sources": [
                 "transpose.cpp",
                 "softmax.cpp",
                 "matmul.cpp"
+            ],
+            "krnl_sources_opt": [
+                "transpose_optimized.cpp",
+                "softmax_optimized.cpp",
+                "matmul_optimized.cpp"
             ],
 
             "gpu_brand": "nvidia",
@@ -179,12 +225,18 @@
                 "para_factor": 40
             },
             "source": "main.cpp",
+            "source_simple": "main_simple.cpp",
             "krnl_sources": [
                 "popcount.cpp",
                 "update_knn.cpp",
                 "knn_vote.cpp"
             ],
-            
+            "krnl_sources_opt": [
+                "popcount_optimized.cpp",
+                "update_knn_optimized.cpp",
+                "knn_vote_optimized.cpp"
+            ],
+
             "gpu_brand": "nvidia",
             "gpu_arch": "",
             
@@ -206,13 +258,20 @@
                 "num_epochs": 5
             },
             "source": "main.cpp",
+            "source_simple": "main_simple.cpp",
             "krnl_sources": [
                 "dotProduct.cpp",
                 "Sigmoid.cpp",
                 "computeGradient.cpp",
                 "updateParameter.cpp"
             ],
-            
+            "krnl_sources_opt": [
+                "dotProduct_optimized.cpp",
+                "Sigmoid_optimized.cpp",
+                "computeGradient_optimized.cpp",
+                "updateParameter_optimized.cpp"
+            ],
+
             "gpu_brand": "nvidia",
             "gpu_arch": "",
             
@@ -233,12 +292,18 @@
                 "nm": 1024
             },
             "source": "main.cpp",
+            "source_simple": "main_simple.cpp",
             "krnl_sources": [
                 "kernel_3mm_0.cpp",
                 "kernel_3mm_1.cpp",
                 "kernel_3mm_2.cpp"
             ],
-            
+            "krnl_sources_opt": [
+                "kernel_3mm_0_optimized.cpp",
+                "kernel_3mm_1_optimized.cpp",
+                "kernel_3mm_2_optimized.cpp"
+            ],
+
             "gpu_brand": "nvidia",
             "gpu_arch": "",
             
@@ -256,9 +321,14 @@
                 "n": 1024
             },
             "source": "main.cpp",
+            "source_simple": "main_simple.cpp",
             "krnl_sources": [
                 "init_array.cpp",
                 "kernel_adi.cpp"
+            ],
+            "krnl_sources_opt": [
+                "init_array_optimized.cpp",
+                "kernel_adi_optimized.cpp"
             ],
             
             "gpu_brand": "nvidia",
@@ -274,17 +344,25 @@
                 "input": "",
                 "output": "",
                 "iteration_times": 1,
-                "nparticles": 1000000,
+                "nparticles": 100000,
                 "savefreq": 10
             },
             "source": [
                 "main.cpp",
                 "common.cpp"
             ],
+            "source_simple": [
+                "main_simple.cpp",
+                "common.cpp"
+            ],
             "krnl_sources": [
-                "compute_forces.cpp",
+                "compute_forces_static.cpp",
                 "grid.cpp",
-                "move_particles.cpp"
+                "move_particles_static.cpp"
+            ],
+            "krnl_sources_opt": [
+                "compute_forces_static_optimized.cpp",
+                "move_particles_static_optimized.cpp"
             ],
             
             "gpu_brand": "nvidia",

@@ -341,14 +341,17 @@ int main(int argc, char *argv[]) {
   cout << "  Single iteration time: " << optimized_total_time / iterations
        << " seconds" << endl;
   cout << "Speedup:" << endl;
-  cout << "  transpose: " << transpose_time / transpose_optimized_time << endl;
-  cout << "  matmul_1: "
-       << matmul_query_key_time / matmul_query_key_optimized_time << endl;
-  cout << "  softmax: " << softmax_time / softmax_optimized_time << endl;
-  cout << "  matmul_2: "
-       << matmul_softmax_value_time / matmul_softmax_value_optimized_time
+  cout << "  transpose: " << transpose_time / transpose_optimized_time << "x"
        << endl;
-  cout << "  Total: " << original_total_time / optimized_total_time << endl;
+  cout << "  matmul_1: "
+       << matmul_query_key_time / matmul_query_key_optimized_time << "x"
+       << endl;
+  cout << "  softmax: " << softmax_time / softmax_optimized_time << "x" << endl;
+  cout << "  matmul_2: "
+       << matmul_softmax_value_time / matmul_softmax_value_optimized_time << "x"
+       << endl;
+  cout << "  Total: " << original_total_time / optimized_total_time << "x"
+       << endl;
   cout << "Whole time: " << whole_time << " seconds" << endl;
 
   delete[] query;

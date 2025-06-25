@@ -19,7 +19,7 @@ TARGET_EXEC_SIMPLE := krnl_{{ target }}_sw_simple
 
 # Source files
 SOURCES := {{ sources }} init_array.cpp
-SOURCES_SIMPLE := main_simple.cpp init_array.cpp
+SOURCES_SIMPLE := {{ sources_simple }} init_array.cpp
 
 # MACRO DEFINITION
 MACRO := -DITERATIONS=$(ITERATIONS) -DNI=$(NI) -DNJ=$(NJ) -DNK=$(NK) -DNL=$(NL) -DNM=$(NM)

@@ -87,5 +87,6 @@ int grid_size(grid_t &grid);
 void grid_add_static(linkedlist_static grad_static[gridsize2], particle_t *p);
 void compute_forces_static(particle_t *particles, int n,
                            linkedlist_static grid_static[gridsize2]);
+void apply_force_static(particle_t& particle, particle_t& neighbor);
 void move_particles_static(particle_t *particles, int n,
                            linkedlist_static grid[gridsize2]);

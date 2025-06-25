@@ -23,4 +23,6 @@ const unsigned long long m4 =
 void popcount(DigitType diff, int *popcount_result);
 void update_knn(const DigitType *training_set, const DigitType *test_set,
                 int dists[K_CONST], int labels[K_CONST]);
+void update(const DigitType *training_set, const DigitType *test_set,
+            int dists[K_CONST], int labels[K_CONST], int label);
 void knn_vote(int lables[K_CONST], LabelType *max_label);

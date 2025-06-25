@@ -427,6 +427,14 @@ def run_makefile(benchmark, backend, env, action, options, log_file=None):
         make_cmd.append(f"sources={benchmark['source']}")
         make_template_vars["sources"] = benchmark['source']
 
+    # Handle source_simple the same way as source
+    if benchmark['source_simple'] and isinstance(benchmark['source_simple'], list):
+        make_cmd.append(f"sources_simple={' '.join(benchmark['source_simple'])}")
+        make_template_vars["sources_simple"] = ' '.join(benchmark['source_simple'])
+    elif benchmark['source_simple']:
+        make_cmd.append(f"sources_simple={benchmark['source_simple']}")
+        make_template_vars["sources_simple"] = benchmark['source_simple']
+
     output_path = f"{cwd}/{benchmark['parameters']['output']}"
     # # if the output_path exists, remove it; only for debug purpose
     # if os.path.exists(output_path):
@@ -679,7 +687,6 @@ def run_makefile(benchmark, backend, env, action, options, log_file=None):
 
         make_template_vars["nparticles"] = benchmark['parameters']['nparticles']
         make_template_vars["savefreq"] = benchmark['parameters']['savefreq']
-
     else:
         pass
 
@@ -707,8 +714,8 @@ def run_makefile(benchmark, backend, env, action, options, log_file=None):
         cpu_sources = [f"cpu_impl/{src}" for src in benchmark['krnl_sources']]
         make_cmd.append(f"cpu_sources={' '.join(cpu_sources)}")
         make_template_vars["cpu_sources"] = ' '.join(cpu_sources)
-        # Add optimized sources for CPU backend
-        cpu_sources_opt = [f"cpu_impl_optimized/{os.path.basename(src).replace('.cpp', '_optimized.cpp')}" for src in benchmark['krnl_sources']]
+        # For optimized CPU sources, use relative paths with cpu_impl_optimized/ prefix
+        cpu_sources_opt = [f"cpu_impl_optimized/{src}" for src in benchmark['krnl_sources_opt']]
         make_cmd.append(f"cpu_sources_opt={' '.join(cpu_sources_opt)}")
         make_template_vars["cpu_sources_opt"] = ' '.join(cpu_sources_opt)
     if backend['gpu_omp']:
