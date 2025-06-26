@@ -1,4 +1,5 @@
 #include "cpu_impl.h"
+#include <cstdio>
 
 void gradient_xy_calc_optimized(pixel_t frame[MAX_HEIGHT][MAX_WIDTH],
     pixel_t gradient_x[MAX_HEIGHT][MAX_WIDTH],

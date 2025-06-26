@@ -1,4 +1,5 @@
 #include "cpu_impl.h"
+#include "math.h"
 
 void updateParameter_optimized(
     FeatureType param[NUM_FEATURES],

@@ -1,4 +1,5 @@
 #include "cpu_impl.h"
+#include "math.h"
 
 void computeGradient_optimized(
     FeatureType grad[NUM_FEATURES],

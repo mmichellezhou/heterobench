@@ -1,3 +1,8 @@
+#include <stdlib.h>
+#include <string.h>
+#include <pthread.h>
+#include <math.h>
+
 #include "cpu_impl.h"
 
 int grid_coord_optimized(double c)

@@ -1,4 +1,5 @@
 #include "cpu_impl.h"
+#include <cstdio>
 
 void gradient_z_calc_optimized(pixel_t frame0[MAX_HEIGHT][MAX_WIDTH],
                      pixel_t frame1[MAX_HEIGHT][MAX_WIDTH],

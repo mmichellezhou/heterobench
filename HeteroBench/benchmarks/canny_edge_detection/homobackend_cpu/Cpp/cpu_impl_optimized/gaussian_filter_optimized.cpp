@@ -1,4 +1,7 @@
 #include "cpu_impl.h"
+#include <cstring>
+#include <iostream>
+#include <math.h>
 
 using namespace std;
 
