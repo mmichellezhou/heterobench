@@ -1,0 +1,26 @@
+{
+  "flow_calc": {
+    "function_generation_success": true
+  },
+  "gradient_weight_x": {
+    "function_generation_success": true
+  },
+  "gradient_weight_y": {
+    "function_generation_success": true
+  },
+  "gradient_xy_calc": {
+    "function_generation_success": true
+  },
+  "gradient_z_calc": {
+    "function_generation_success": true
+  },
+  "outer_product": {
+    "function_generation_success": true
+  },
+  "tensor_weight_x": {
+    "function_generation_success": true
+  },
+  "tensor_weight_y": {
+    "function_generation_success": true
+  }
+}

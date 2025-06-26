@@ -1,0 +1,297 @@
+{
+  "3_matrix_multiplication": {
+    "function_results": {
+      "kernel_3mm_0": {
+        "function_generation_success": true
+      },
+      "kernel_3mm_1": {
+        "function_generation_success": true
+      },
+      "kernel_3mm_2": {
+        "function_generation_success": true
+      }
+    },
+    "performance_analysis": {
+      "verification_success": true,
+      "original_time": 15.0823,
+      "optimized_time": 7.30449,
+      "speedup": 2.06479,
+      "build_success": true
+    },
+    "overall_status": {
+      "functions_processed": 3,
+      "functions_successful": 3,
+      "build_success": true,
+      "verification_success": true
+    },
+    "speedup": 2.06479
+  },
+  "alternating_direction_implicit": {
+    "function_results": {
+      "init_array": {
+        "function_generation_success": true
+      },
+      "kernel_adi": {
+        "function_generation_success": true
+      }
+    },
+    "performance_analysis": {
+      "verification_success": false,
+      "original_time": 2.84796,
+      "optimized_time": 1.55816,
+      "speedup": 1.82777,
+      "build_success": true
+    },
+    "overall_status": {
+      "functions_processed": 2,
+      "functions_successful": 2,
+      "build_success": true,
+      "verification_success": false
+    },
+    "speedup": 1.82777
+  },
+  "canny_edge_detection": {
+    "function_results": {
+      "double_thresholding": {
+        "function_generation_success": true
+      },
+      "edge_thinning": {
+        "function_generation_success": true
+      },
+      "gaussian_filter": {
+        "function_generation_success": true
+      },
+      "gradient_intensity_direction": {
+        "function_generation_success": true
+      },
+      "hysteresis": {
+        "function_generation_success": true
+      }
+    },
+    "performance_analysis": {
+      "verification_success": false,
+      "original_time": null,
+      "optimized_time": null,
+      "speedup": null,
+      "build_success": false
+    },
+    "overall_status": {
+      "functions_processed": 5,
+      "functions_successful": 5,
+      "build_success": false,
+      "verification_success": false
+    }
+  },
+  "convolutional_neural_network": {
+    "function_results": {
+      "conv2d": {
+        "function_generation_success": true
+      },
+      "dot_add": {
+        "function_generation_success": true
+      },
+      "max_pooling": {
+        "function_generation_success": true
+      },
+      "pad_input": {
+        "function_generation_success": true
+      },
+      "relu": {
+        "function_generation_success": true
+      },
+      "softmax": {
+        "function_generation_success": true
+      }
+    },
+    "performance_analysis": {
+      "verification_success": true,
+      "original_time": 24.6687,
+      "optimized_time": 4.18068,
+      "speedup": 5.90063,
+      "build_success": true
+    },
+    "overall_status": {
+      "functions_processed": 6,
+      "functions_successful": 6,
+      "build_success": true,
+      "verification_success": true
+    },
+    "speedup": 5.90063
+  },
+  "digit_recog": {
+    "function_results": {
+      "knn_vote": {
+        "function_generation_success": true
+      },
+      "popcount": {
+        "function_generation_success": true
+      },
+      "update_knn": {
+        "function_generation_success": true
+      }
+    },
+    "performance_analysis": {
+      "verification_success": true,
+      "original_time": 0.000776961,
+      "optimized_time": 0.000343536,
+      "speedup": 2.26166,
+      "build_success": true
+    },
+    "overall_status": {
+      "functions_processed": 3,
+      "functions_successful": 3,
+      "build_success": true,
+      "verification_success": true
+    },
+    "speedup": 2.26166
+  },
+  "one_head_attention": {
+    "function_results": {
+      "matmul": {
+        "function_generation_success": true
+      },
+      "softmax": {
+        "function_generation_success": true
+      },
+      "transpose": {
+        "function_generation_success": true
+      }
+    },
+    "performance_analysis": {
+      "verification_success": true,
+      "original_time": 11.9529,
+      "optimized_time": 4.11757,
+      "speedup": 2.90291,
+      "build_success": true
+    },
+    "overall_status": {
+      "functions_processed": 3,
+      "functions_successful": 3,
+      "build_success": true,
+      "verification_success": true
+    },
+    "speedup": 2.90291
+  },
+  "optical_flow": {
+    "function_results": {
+      "flow_calc": {
+        "function_generation_success": true
+      },
+      "gradient_weight_x": {
+        "function_generation_success": true
+      },
+      "gradient_weight_y": {
+        "function_generation_success": true
+      },
+      "gradient_xy_calc": {
+        "function_generation_success": true
+      },
+      "gradient_z_calc": {
+        "function_generation_success": true
+      },
+      "outer_product": {
+        "function_generation_success": true
+      },
+      "tensor_weight_x": {
+        "function_generation_success": true
+      },
+      "tensor_weight_y": {
+        "function_generation_success": true
+      }
+    },
+    "performance_analysis": {
+      "verification_success": false,
+      "original_time": 1.74963,
+      "optimized_time": 1.42465,
+      "speedup": 1.22811,
+      "build_success": true
+    },
+    "overall_status": {
+      "functions_processed": 8,
+      "functions_successful": 8,
+      "build_success": true,
+      "verification_success": false
+    },
+    "speedup": 1.22811
+  },
+  "parallelize_particle": {
+    "function_results": {
+      "compute_forces_static": {
+        "function_generation_success": true
+      },
+      "move_particles_static": {
+        "function_generation_success": true
+      }
+    },
+    "performance_analysis": {
+      "verification_success": true,
+      "original_time": 0.0463273,
+      "optimized_time": 0.0322208,
+      "speedup": 1.43781,
+      "build_success": true
+    },
+    "overall_status": {
+      "functions_processed": 2,
+      "functions_successful": 2,
+      "build_success": true,
+      "verification_success": true
+    },
+    "speedup": 1.43781
+  },
+  "sobel_filter": {
+    "function_results": {
+      "compute_gradient_magnitude": {
+        "function_generation_success": true
+      },
+      "sobel_filter_x": {
+        "function_generation_success": true
+      },
+      "sobel_filter_y": {
+        "function_generation_success": true
+      }
+    },
+    "performance_analysis": {
+      "verification_success": false,
+      "original_time": null,
+      "optimized_time": null,
+      "speedup": null,
+      "build_success": false
+    },
+    "overall_status": {
+      "functions_processed": 3,
+      "functions_successful": 3,
+      "build_success": false,
+      "verification_success": false
+    }
+  },
+  "spam_filter": {
+    "function_results": {
+      "Sigmoid": {
+        "function_generation_success": true
+      },
+      "computeGradient": {
+        "function_generation_success": true
+      },
+      "dotProduct": {
+        "function_generation_success": true
+      },
+      "updateParameter": {
+        "function_generation_success": true
+      }
+    },
+    "performance_analysis": {
+      "verification_success": true,
+      "original_time": 0.25966,
+      "optimized_time": 0.139625,
+      "speedup": 1.8597,
+      "build_success": true
+    },
+    "overall_status": {
+      "functions_processed": 4,
+      "functions_successful": 4,
+      "build_success": true,
+      "verification_success": true
+    },
+    "speedup": 1.8597
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "skip_files": {
+    "parallelize_particle": ["grid.cpp"],
+    "optical_flow": [],
+    "canny_edge_detection": [],
+    "convolutional_neural_network": [],
+    "multilayer_perceptron": [],
+    "one_head_attention": [],
+    "spam_filter": [],
+    "3_matrix_multiplication": [],
+    "alternating_direction_implicit": [],
+    "digit_recog": [],
+    "sobel_filter": []
+  }
+} 

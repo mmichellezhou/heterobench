@@ -1,6 +1,64 @@
 #include "cpu_impl.h"
 
+using namespace std;
+
+inline int Min(int a, int b) { return a < b ? a : b; }
+inline int Max(int a, int b) { return a > b ? a : b; }
+
 void compute_forces_static_optimized(particle_t *particles, int n,
-                                     linkedlist_static grid_static[gridsize2]) {
-  compute_forces_static(particles, n, grid_static);
+                                     linkedlist_static grid_static[gridsize2])
+{
+    for (int i = 0; i < n; i++)
+    {
+        // Reset acceleration for the current particle.
+        // The compiler is expected to keep particles[i].ax and particles[i].ay in registers
+        // for accumulation throughout the inner loops, writing back only once at the end of this 'i' iteration.
+        particles[i].ax = particles[i].ay = 0;
+
+        // Determine the grid coordinates for the current particle.
+        int gx = grid_coord(particles[i].x);
+        int gy = grid_coord(particles[i].y);
+
+        // Pre-calculate the loop bounds for the 3x3 neighboring grid cells.
+        // This avoids redundant Min/Max function calls within the outer loops.
+        int start_x = Max(gx - 1, 0);
+        int end_x = Min(gx + 1, gridsize - 1);
+        int start_y = Max(gy - 1, 0);
+        int end_y = Min(gy + 1, gridsize - 1);
+
+        for (int x = start_x; x <= end_x; x++)
+        {
+            // Optimize memory access for 'grid_static'.
+            // Calculate a base pointer for the current row (x-coordinate) of grid cells.
+            // This allows for simpler pointer arithmetic in the inner 'y' loop, potentially
+            // leading to more efficient address calculations by the compiler.
+            linkedlist_static* grid_row_ptr = &grid_static[x * gridsize];
+
+            for (int y = start_y; y <= end_y; y++)
+            {
+                // Access the current grid cell using pointer arithmetic from the row base pointer.
+                linkedlist_static* curr = grid_row_ptr + y;
+                
+                int t = curr->index_now;
+
+                // Unroll the innermost 'while' loop. This loop iterates over particles within a grid cell.
+                // Unrolling reduces loop overhead (branching, counter decrements) and exposes more
+                // instruction-level parallelism, especially when 't' (number of particles in a cell)
+                // is small, which is common in sparse grid simulations.
+                // This pattern handles variable loop counts efficiently by peeling off a few iterations
+                // and then falling back to the original loop for any remaining iterations.
+                if (t >= 1) { apply_force_static(particles[i], (curr->value[t])); t--; }
+                if (t >= 1) { apply_force_static(particles[i], (curr->value[t])); t--; }
+                if (t >= 1) { apply_force_static(particles[i], (curr->value[t])); t--; }
+                if (t >= 1) { apply_force_static(particles[i], (curr->value[t])); t--; }
+
+                // Handle any remaining iterations if 't' was larger than the unroll factor (4 in this case).
+                while (t != 0)
+                {
+                    apply_force_static(particles[i], (curr->value[t]));
+                    t--;
+                }
+            }
+        }
+    }
 }

@@ -1,0 +1,17 @@
+{
+  "double_thresholding": {
+    "function_generation_success": true
+  },
+  "edge_thinning": {
+    "function_generation_success": true
+  },
+  "gaussian_filter": {
+    "function_generation_success": true
+  },
+  "gradient_intensity_direction": {
+    "function_generation_success": true
+  },
+  "hysteresis": {
+    "function_generation_success": true
+  }
+}

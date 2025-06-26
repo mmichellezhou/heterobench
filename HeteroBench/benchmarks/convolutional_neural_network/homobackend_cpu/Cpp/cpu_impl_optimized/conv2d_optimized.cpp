@@ -2,70 +2,72 @@
 
 void conv2d_optimized(double *conv2d_input, double *conv2d_kernel, double *input_padded, double conv2d_bias, int stride, int padding, int input_h, int input_w, int kernel_h, int kernel_w, double *conv2d_output)
 {
-  // The pad_input function is assumed to be defined elsewhere and correctly populates input_padded.
-  // It is called once at the beginning as per the original code structure.
+  // Pre-calculate constants that are invariant across the outer loops.
+  // This reduces redundant calculations inside the loops (strength reduction).
+  const int padded_input_w = input_w + 2 * padding;
+  const int output_h = (input_h + 2 * padding - kernel_h) / stride + 1;
+  const int output_w = (input_w + 2 * padding - kernel_w) / stride + 1;
+
+  // The pad_input function is called once before the main convolution loops.
+  // Its implementation is assumed to be correct and efficient.
   pad_input(conv2d_input, input_padded, input_h, input_w, padding);
 
-  // Pre-calculate output dimensions
-  int output_h = (input_h + 2 * padding - kernel_h) / stride + 1;
-  int output_w = (input_w + 2 * padding - kernel_w) / stride + 1;
+  // Define an unrolling factor for the innermost 'l' loop.
+  // Unrolling helps expose Instruction-Level Parallelism (ILP) to the CPU's
+  // out-of-order execution engine and reduces loop overhead.
+  // A factor of 4 is chosen as a common sweet spot for scalar double operations,
+  // balancing ILP benefits with code size and register pressure.
+  const int UNROLL_L = 4; 
 
-  // Pre-calculate padded input width, which is constant for all accesses
-  // This is a form of strength reduction, moving a constant calculation out of loops.
-  int padded_input_width = input_w + 2 * padding;
+  // Iterate over the output height
+  for (int i = 0; i < output_h; ++i) {
+    // Calculate the base row offset for accessing `input_padded` for the current `i`.
+    // This offset is invariant for the `j`, `k`, and `l` loops.
+    const int input_row_base_offset = i * stride * padded_input_w;
 
-  // Outer loops for output dimensions
-  for (int i = 0; i < output_h; i++) {
-    // Pre-calculate the base row start index for the input_padded array for the current 'i'
-    // This avoids re-calculating 'i * stride' in the inner loops.
-    int base_input_row_start = i * stride;
+    // Iterate over the output width
+    for (int j = 0; j < output_w; ++j) {
+      double tmp = 0.0; // Accumulator for the current output pixel value
 
-    for (int j = 0; j < output_w; j++) {
-      // Pre-calculate the base column start index for the input_padded array for the current 'j'
-      // This avoids re-calculating 'j * stride' in the inner loops.
-      int base_input_col_start = j * stride;
+      // Calculate the base column offset for accessing `input_padded` for the current `j`.
+      // This offset is invariant for the `k` and `l` loops.
+      const int input_col_base_offset = j * stride;
 
-      // Use multiple accumulators to improve Instruction-Level Parallelism (ILP).
-      // This breaks the data dependency chain of a single 'tmp' variable, allowing
-      // the CPU to execute multiple multiply-add operations concurrently.
-      double tmp0 = 0.0;
-      double tmp1 = 0.0;
-      double tmp2 = 0.0;
-      double tmp3 = 0.0;
+      // Iterate over the kernel height
+      for (int k = 0; k < kernel_h; ++k) {
+        // Calculate the row offset within the `input_padded` region for the current `k`.
+        // This offset is invariant for the `l` loop.
+        const int input_k_offset = k * padded_input_w;
+        // Calculate the row offset within `conv2d_kernel` for the current `k`.
+        // This offset is invariant for the `l` loop.
+        const int kernel_k_offset = k * kernel_w;
 
-      // Loop over kernel height
-      for (int k = 0; k < kernel_h; k++) {
-        // Pre-calculate the row offset for input_padded for the current 'k'
-        // This avoids re-calculating '(base_input_row_start + k) * padded_input_width' in the innermost loop.
-        int input_row_offset = (base_input_row_start + k) * padded_input_width;
-        // Pre-calculate the row offset for conv2d_kernel for the current 'k'
-        // This avoids re-calculating 'k * kernel_w' in the innermost loop.
-        int kernel_row_offset = k * kernel_w;
+        // Pre-calculate pointers to the start of the current row in the relevant
+        // `input_padded` region and the current row in the `conv2d_kernel`.
+        // Using pointers and pre-calculating offsets reduces address calculation
+        // complexity inside the innermost loop.
+        const double *current_input_row_ptr = input_padded + input_row_base_offset + input_col_base_offset + input_k_offset;
+        const double *current_kernel_row_ptr = conv2d_kernel + kernel_k_offset;
 
-        // Loop over kernel width
+        // Unroll the innermost 'l' loop.
+        // This allows the CPU to fetch multiple data items and perform multiple
+        // independent multiply operations in parallel, improving ILP.
+        // The additions are kept sequential to maintain exact floating-point
+        // summation order, ensuring bit-exact functional equivalence.
         int l = 0;
-        // Unroll the innermost 'l' loop by a factor of 4.
-        // This reduces loop overhead (branching, index incrementing) and exposes more ILP.
-        // Each unrolled iteration uses a different accumulator (tmp0, tmp1, tmp2, tmp3)
-        // to maximize independent operations.
-        for (; l + 3 < kernel_w; l += 4) {
-          tmp0 += input_padded[input_row_offset + base_input_col_start + l]     * conv2d_kernel[kernel_row_offset + l];
-          tmp1 += input_padded[input_row_offset + base_input_col_start + l + 1] * conv2d_kernel[kernel_row_offset + l + 1];
-          tmp2 += input_padded[input_row_offset + base_input_col_start + l + 2] * conv2d_kernel[kernel_row_offset + l + 2];
-          tmp3 += input_padded[input_row_offset + base_input_col_start + l + 3] * conv2d_kernel[kernel_row_offset + l + 3];
+        for (; l + UNROLL_L <= kernel_w; l += UNROLL_L) {
+          tmp += current_input_row_ptr[l]     * current_kernel_row_ptr[l];
+          tmp += current_input_row_ptr[l + 1] * current_kernel_row_ptr[l + 1];
+          tmp += current_input_row_ptr[l + 2] * current_kernel_row_ptr[l + 2];
+          tmp += current_input_row_ptr[l + 3] * current_kernel_row_ptr[l + 3];
         }
-
-        // Handle remaining elements if kernel_w is not a multiple of 4
-        // The remainder elements are added to the first accumulator (tmp0).
-        for (; l < kernel_w; l++) {
-          tmp0 += input_padded[input_row_offset + base_input_col_start + l] * conv2d_kernel[kernel_row_offset + l];
+        // Handle any remaining elements if `kernel_w` is not a multiple of `UNROLL_L`.
+        for (; l < kernel_w; ++l) {
+          tmp += current_input_row_ptr[l] * current_kernel_row_ptr[l];
         }
       }
-
-      // Sum up the results from all accumulators to get the final 'tmp' value
-      double tmp = tmp0 + tmp1 + tmp2 + tmp3;
-
-      // Store the final convolution result for the current output pixel
+      // Store the accumulated sum plus bias to the output array.
+      // This access is contiguous for the 'j' loop, which is cache-friendly.
       conv2d_output[i * output_w + j] = tmp + conv2d_bias;
     }
   }

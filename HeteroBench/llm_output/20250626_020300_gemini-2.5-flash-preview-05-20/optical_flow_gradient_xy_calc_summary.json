@@ -1,0 +1,47 @@
+{
+  "function_name": "gradient_xy_calc",
+  "original_file_path": "benchmarks/optical_flow/homobackend_cpu/Cpp/cpu_impl/gradient_xy_calc.cpp",
+  "optimized_file_path": "benchmarks/optical_flow/homobackend_cpu/Cpp/cpu_impl_optimized/gradient_xy_calc_optimized.cpp",
+  "status": {
+    "function_generation_success": true,
+    "compilation_success": false,
+    "execution_success": false,
+    "verification_success": false
+  },
+  "statistics": {
+    "num_code_blocks_generated": 1,
+    "optimized_code_length": 4537,
+    "prompt_length": 4622,
+    "llm_response_length": 4548
+  },
+  "details": {
+    "entire_llm_response": {
+      "model": "gemini-2.5-flash-preview-05-20",
+      "provider": "google",
+      "temperature": 0.0,
+      "max_tokens": 65536,
+      "response": {
+        "id": "J-hcaMOjB8DD1MkPwp3sSA",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "```cpp\nvoid gradient_xy_calc_optimized(pixel_t frame[MAX_HEIGHT][MAX_WIDTH],\n    pixel_t gradient_x[MAX_HEIGHT][MAX_WIDTH],\n    pixel_t gradient_y[MAX_HEIGHT][MAX_WIDTH])\n{\n  // The original function's logic involves two distinct regions for writing to gradient_x/y:\n  // 1. A central region where actual gradient computation occurs.\n  // 2. A border region where gradient values are set to 0.\n  // Other regions of the output arrays are left untouched.\n  // To optimize, we separate these regions into distinct loops to eliminate conditional branches\n  // from the hot path and improve cache locality for the zeroing operations.\n\n  // 1. Zero out the border regions of gradient_x and gradient_y.\n  // These correspond to the `else if (r >= 2 && c >= 2)` block in the original code,\n  // covering the output indices [0..MAX_HEIGHT-1][0..MAX_WIDTH-1] that are not\n  // part of the main computation region.\n\n  // Zero top 2 rows (output r_out = 0, 1)\n  for (int r_out = 0; r_out < 2; ++r_out) {\n      for (int c_out = 0; c_out < MAX_WIDTH; ++c_out) {\n          gradient_x[r_out][c_out] = 0;\n          gradient_y[r_out][c_out] = 0;\n      }\n  }\n\n  // Zero bottom 2 rows (output r_out = MAX_HEIGHT-2, MAX_HEIGHT-1)\n  // This loop only executes if MAX_HEIGHT is large enough for these rows to exist\n  // and be distinct from the top rows.\n  if (MAX_HEIGHT > 2) {\n    for (int r_out = MAX_HEIGHT - 2; r_out < MAX_HEIGHT; ++r_out) {\n        for (int c_out = 0; c_out < MAX_WIDTH; ++c_out) {\n            gradient_x[r_out][c_out] = 0;\n            gradient_y[r_out][c_out] = 0;\n        }\n    }\n  }\n\n  // Zero left 2 columns (output c_out = 0, 1), excluding the top/bottom 2 rows already handled.\n  // This loop only executes if MAX_WIDTH is large enough and there are middle rows.\n  if (MAX_WIDTH > 2) {\n    for (int r_out = 2; r_out < MAX_HEIGHT - 2; ++r_out) {\n        for (int c_out = 0; c_out < 2; ++c_out) {\n            gradient_x[r_out][c_out] = 0;\n            gradient_y[r_out][c_out] = 0;\n        }\n    }\n\n    // Zero right 2 columns (output c_out = MAX_WIDTH-2, MAX_WIDTH-1), excluding top/bottom 2 rows.\n    // This loop only executes if MAX_WIDTH is large enough and there are middle rows.\n    for (int r_out = 2; r_out < MAX_HEIGHT - 2; ++r_out) {\n        for (int c_out = MAX_WIDTH - 2; c_out < MAX_WIDTH; ++c_out) {\n            gradient_x[r_out][c_out] = 0;\n            gradient_y[r_out][c_out] = 0;\n        }\n    }\n  }\n\n  // 2. Main Computation Loop.\n  // This region corresponds to the original `if (r >= 4 && r < MAX_HEIGHT && c >= 4 && c < MAX_WIDTH)` block.\n  // The output indices (r-2, c-2) range from (2,2) to (MAX_HEIGHT-3, MAX_WIDTH-3).\n  // This loop only executes if MAX_HEIGHT >= 4 and MAX_WIDTH >= 4, ensuring the central region exists.\n  for (int r = 4; r < MAX_HEIGHT; r++)\n  {\n    for (int c = 4; c < MAX_WIDTH; c++)\n    {\n      pixel_t x_grad = 0;\n      pixel_t y_grad = 0;\n\n      // Loop Unrolling: The innermost 'i' loop has a fixed iteration count of 5.\n      // Unrolling it completely eliminates loop overhead and exposes more instruction-level\n      // parallelism for the CPU's out-of-order execution engine.\n      // This also allows the compiler to better optimize register usage for intermediate calculations.\n\n      // i = 0: GRAD_WEIGHTS[4-0] = GRAD_WEIGHTS[4]\n      x_grad += frame[r-2][c-0] * GRAD_WEIGHTS[4];\n      y_grad += frame[r-0][c-2] * GRAD_WEIGHTS[4];\n\n      // i = 1: GRAD_WEIGHTS[4-1] = GRAD_WEIGHTS[3]\n      x_grad += frame[r-2][c-1] * GRAD_WEIGHTS[3];\n      y_grad += frame[r-1][c-2] * GRAD_WEIGHTS[3];\n\n      // i = 2: GRAD_WEIGHTS[4-2] = GRAD_WEIGHTS[2]\n      // Note: frame[r-2][c-2] is a common subexpression for both x_grad and y_grad here.\n      // The compiler should optimize this to a single memory load.\n      x_grad += frame[r-2][c-2] * GRAD_WEIGHTS[2];\n      y_grad += frame[r-2][c-2] * GRAD_WEIGHTS[2];\n\n      // i = 3: GRAD_WEIGHTS[4-3] = GRAD_WEIGHTS[1]\n      x_grad += frame[r-2][c-3] * GRAD_WEIGHTS[1];\n      y_grad += frame[r-3][c-2] * GRAD_WEIGHTS[1];\n\n      // i = 4: GRAD_WEIGHTS[4-4] = GRAD_WEIGHTS[0]\n      x_grad += frame[r-2][c-4] * GRAD_WEIGHTS[0];\n      y_grad += frame[r-4][c-2] * GRAD_WEIGHTS[0];\n\n      // Strength Reduction: Division by a constant (12) is typically optimized by compilers\n      // into a sequence of multiplications and shifts for integer types, which is faster.\n      // For floating-point types, it would be optimized to multiplication by reciprocal.\n      gradient_x[r-2][c-2] = x_grad / 12;\n      gradient_y[r-2][c-2] = y_grad / 12;\n    }\n  }\n}\n```",
+              "function_call": null,
+              "tool_calls": null
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "created": 1750919207,
+        "model": "gemini-2.5-flash-preview-05-20",
+        "usage": {
+          "prompt_tokens": 1434,
+          "completion_tokens": 1615,
+          "total_tokens": 13565
+        }
+      }
+    }
+  }
+}

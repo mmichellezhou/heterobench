@@ -362,6 +362,7 @@
             ],
             "krnl_sources_opt": [
                 "compute_forces_static_optimized.cpp",
+                "grid_optimized.cpp",
                 "move_particles_static_optimized.cpp"
             ],
             

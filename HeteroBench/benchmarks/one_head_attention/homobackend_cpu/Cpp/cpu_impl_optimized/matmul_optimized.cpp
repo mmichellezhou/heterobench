@@ -2,78 +2,85 @@
 
 void matmul_optimized(double *matmul_x, double *matmul_y, double *matmul_output,
                 int batch_size, int input_h, int input_w, int output_w) {
-    // Initialize matmul_output to 0.
-    // This loop is already efficient due to contiguous writes.
-    // Using (long long) for the loop bound to prevent potential integer overflow
-    // if batch_size * input_h * output_w exceeds INT_MAX.
-    for (long long i = 0; i < (long long)batch_size * input_h * output_w; ++i) {
-        matmul_output[i] = 0.0;
+    // Initialize matmul_output to 0. This is done once for the entire output array.
+    for (int i = 0; i < batch_size * input_h * output_w; i++) {
+        matmul_output[i] = 0;
     }
 
-    // Define tile sizes and unroll factor as local constants.
-    // These are within the function scope and do not require external definitions.
-    const int TILE_J = 64;    // Tile size for the 'j' dimension (rows of X and Output)
-    const int TILE_K = 64;    // Tile size for the 'k' dimension (columns of Y and Output)
-    const int TILE_L = 64;    // Tile size for the 'l' dimension (inner product dimension)
-    const int UNROLL_K = 4;   // Unroll factor for the innermost 'k' loop
+    // Define tile sizes for cache optimization. These constants are defined within the function scope.
+    // TILE_SIZE is chosen to ensure that the working set (output_tile, plus parts of x and y)
+    // fits within the L1 cache (e.g., 32KB per core).
+    const int TILE_SIZE = 32; 
+    // UNROLL_K is the unroll factor for the innermost loop to expose Instruction-Level Parallelism (ILP).
+    const int UNROLL_K = 4;   
 
-    // The overall loop order is i, jj, kk, ll, j, l, k.
-    // This order is chosen to maximize data reuse and improve cache locality
-    // by ensuring contiguous memory accesses in the innermost loops.
+    // Loop over batches
+    for (int i = 0; i < batch_size; i++) {
+        // Pre-calculate base pointers for the current batch to reduce address calculations inside loops.
+        double *current_output_batch_ptr = matmul_output + i * input_h * output_w;
+        double *current_x_batch_ptr = matmul_x + i * input_h * input_w;
+        double *current_y_batch_ptr = matmul_y + i * input_w * output_w;
 
-    // Loop over batches (i)
-    for (int i = 0; i < batch_size; ++i) {
-        // Pre-calculate batch-level base pointers for strength reduction.
-        // Using (long long) for products to prevent potential integer overflow for large dimensions.
-        double* output_batch_base = matmul_output + (long long)i * input_h * output_w;
-        double* x_batch_base = matmul_x + (long long)i * input_h * input_w;
-        double* y_batch_base = matmul_y + (long long)i * input_w * output_w;
+        // Tiled loops for 'j' (input_h dimension)
+        for (int jj = 0; jj < input_h; jj += TILE_SIZE) {
+            // Calculate the actual end boundary for the current 'j' tile
+            int j_block_end = (jj + TILE_SIZE < input_h ? jj + TILE_SIZE : input_h);
 
-        // Tiling loop for the 'j' dimension (rows of X and Output)
-        for (int jj = 0; jj < input_h; jj += TILE_J) {
-            // Tiling loop for the 'k' dimension (columns of Y and Output)
-            for (int kk = 0; kk < output_w; kk += TILE_K) {
-                // Tiling loop for the 'l' dimension (inner product dimension)
-                // This loop iterates over blocks of the reduction dimension.
-                for (int ll = 0; ll < input_w; ll += TILE_L) {
+            // Tiled loops for 'k' (output_w dimension)
+            for (int kk = 0; kk < output_w; kk += TILE_SIZE) {
+                // Calculate the actual end boundary for the current 'k' tile
+                int k_block_end = (kk + TILE_SIZE < output_w ? kk + TILE_SIZE : output_w);
 
-                    // Inner loops processing elements within the current tiles.
-                    // Loop for 'j' (rows within the current 'j' tile)
-                    // Use ternary operator for bounds to avoid requiring <algorithm> for std::min.
-                    for (int j = jj; j < (jj + TILE_J < input_h ? jj + TILE_J : input_h); ++j) {
-                        // Pre-calculate row-level base pointers for X and Output.
-                        double* x_row_base = x_batch_base + (long long)j * input_w;
-                        double* output_row_base = output_batch_base + (long long)j * output_w;
+                // Declare a temporary tile for accumulating results.
+                // This array is allocated on the stack and will hold a TILE_SIZE x TILE_SIZE block
+                // of the output matrix, allowing for register-level accumulation and reducing
+                // read-modify-write operations to global memory.
+                double output_tile[TILE_SIZE][TILE_SIZE];
 
-                        // Loop for 'l' (elements within the current 'l' tile)
-                        // Use ternary operator for bounds.
-                        for (int l = ll; l < (ll + TILE_L < input_w ? ll + TILE_L : input_w); ++l) {
-                            // Load x[i][j][l] once into a register (x_val) for reuse across 'k' loop.
-                            double x_val = x_row_base[l];
+                // Initialize the temporary output_tile to 0.0 for this block.
+                // This is crucial as we will accumulate into it.
+                for (int j_local = 0; j_local < TILE_SIZE; ++j_local) {
+                    for (int k_local = 0; k_local < TILE_SIZE; ++k_local) {
+                        output_tile[j_local][k_local] = 0.0;
+                    }
+                }
 
-                            // Pre-calculate column-level base pointer for Y.
-                            // y[i][l][k] accesses are contiguous in 'k' for fixed 'i' and 'l'.
-                            double* y_col_base = y_batch_base + (long long)l * output_w;
+                // Tiled loops for 'l' (input_w dimension, the reduction dimension)
+                for (int ll = 0; ll < input_w; ll += TILE_SIZE) {
+                    // Calculate the actual end boundary for the current 'l' tile
+                    int l_block_end = (ll + TILE_SIZE < input_w ? ll + TILE_SIZE : input_w);
 
-                            // Loop for 'k' (columns within the current 'k' tile) - innermost loop.
-                            // This loop is unrolled to expose Instruction-Level Parallelism (ILP)
-                            // and reduce loop overhead.
+                    // Inner loops for 'j' within the current 'j' tile
+                    for (int j = jj; j < j_block_end; j++) {
+                        // Inner loops for 'l' within the current 'l' tile
+                        for (int l = ll; l < l_block_end; l++) {
+                            // Load x[i][j][l] once into a register for reuse across the 'k' loop.
+                            double x_val = current_x_batch_ptr[j * input_w + l]; 
+                            
+                            // Inner loop for 'k' within the current 'k' tile, with unrolling.
+                            // This loop accesses y[i][l][k] and accumulates into output_tile[j-jj][k-kk].
+                            // The access pattern for y[i][l][k] is contiguous for 'k', which is cache-friendly.
                             int k = kk;
-                            // Calculate the effective end bound for the current k-tile.
-                            int k_end_tile = (kk + TILE_K < output_w ? kk + TILE_K : output_w);
-
-                            // Unrolled loop body for 'k'
-                            for (; k + UNROLL_K <= k_end_tile; k += UNROLL_K) {
-                                output_row_base[k]     += x_val * y_col_base[k];
-                                output_row_base[k + 1] += x_val * y_col_base[k + 1];
-                                output_row_base[k + 2] += x_val * y_col_base[k + 2];
-                                output_row_base[k + 3] += x_val * y_col_base[k + 3];
+                            // Process 'k' in chunks of UNROLL_K
+                            for (; k + UNROLL_K <= k_block_end; k += UNROLL_K) {
+                                output_tile[j - jj][k - kk] += x_val * current_y_batch_ptr[l * output_w + k];
+                                output_tile[j - jj][k - kk + 1] += x_val * current_y_batch_ptr[l * output_w + k + 1];
+                                output_tile[j - jj][k - kk + 2] += x_val * current_y_batch_ptr[l * output_w + k + 2];
+                                output_tile[j - jj][k - kk + 3] += x_val * current_y_batch_ptr[l * output_w + k + 3];
                             }
-                            // Remainder loop for 'k' (handles elements not covered by unrolling)
-                            for (; k < k_end_tile; ++k) {
-                                output_row_base[k] += x_val * y_col_base[k];
+                            // Handle any remaining 'k' elements that don't fit into a full unrolled chunk
+                            for (; k < k_block_end; k++) {
+                                output_tile[j - jj][k - kk] += x_val * current_y_batch_ptr[l * output_w + k];
                             }
                         }
+                    }
+                }
+
+                // After accumulating all contributions for the current output tile,
+                // write the results back from the temporary output_tile to the global matmul_output array.
+                for (int j = jj; j < j_block_end; j++) {
+                    for (int k = kk; k < k_block_end; k++) {
+                        current_output_batch_ptr[j * output_w + k] = output_tile[j - jj][k - kk];
                     }
                 }
             }

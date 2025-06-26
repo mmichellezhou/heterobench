@@ -1,0 +1,133 @@
+```cpp
+void flow_calc_optimized(tensor_t tensors[MAX_HEIGHT][MAX_WIDTH],
+               velocity_t output[MAX_HEIGHT][MAX_WIDTH])
+{
+  // Optimization 1: Separate boundary handling from core computation.
+  // Initialize the entire output array to zeros. This avoids conditional branches
+  // inside the main processing loop and simplifies the core loop's bounds.
+  for (int r = 0; r < MAX_HEIGHT; ++r)
+  {
+    for (int c = 0; c < MAX_WIDTH; ++c)
+    {
+      output[r][c].x = 0;
+      output[r][c].y = 0;
+    }
+  }
+
+  // Core computation for the inner region.
+  // The original condition `r >= 2 && r < MAX_HEIGHT - 2 && c >= 2 && c < MAX_WIDTH - 2`
+  // translates to:
+  //   'r' loop from 2 up to MAX_HEIGHT - 3 (inclusive)
+  //   'c' loop from 2 up to MAX_WIDTH - 3 (inclusive)
+  for (int r = 2; r < MAX_HEIGHT - 2; ++r)
+  {
+    // Optimization 3: Loop Unrolling for the inner 'c' loop.
+    // Unrolling by a factor of 4 to reduce loop overhead and expose more
+    // instruction-level parallelism for the CPU's out-of-order execution engine.
+    // The 'c' loop runs from 2 to MAX_WIDTH - 2 (exclusive).
+    // Number of iterations in the core 'c' loop: (MAX_WIDTH - 2) - 2 = MAX_WIDTH - 4.
+    const int c_start_core = 2;
+    const int c_end_core = MAX_WIDTH - 2; // Exclusive upper bound for the core 'c' loop
+    const int num_core_cols = c_end_core - c_start_core;
+
+    // Calculate the end point for the unrolled loop to handle remainders.
+    // This ensures we process full blocks of 4 elements.
+    int c_unrolled_end = c_start_core + (num_core_cols / 4) * 4;
+
+    for (int c = c_start_core; c < c_unrolled_end; c += 4)
+    {
+      // Unrolled block 1 (for column 'c')
+      // Optimization 2: Register Optimization and Common Subexpression Elimination (CSE).
+      // Load values from memory into local variables (likely CPU registers) once
+      // to minimize redundant memory accesses and enable CSE.
+      pixel_t v0_0 = tensors[r][c].val[0];
+      pixel_t v1_0 = tensors[r][c].val[1];
+      pixel_t v3_0 = tensors[r][c].val[3];
+      pixel_t v4_0 = tensors[r][c].val[4];
+      pixel_t v5_0 = tensors[r][c].val[5];
+
+      pixel_t v3_sq_0 = v3_0 * v3_0; // Common subexpression
+      pixel_t term_v5_v3_0 = v5_0 * v3_0; // Common subexpression
+      pixel_t term_v4_v1_0 = v4_0 * v1_0; // Common subexpression
+      pixel_t term_v4_v3_0 = v4_0 * v3_0; // Common subexpression
+      pixel_t term_v5_v0_0 = v5_0 * v0_0; // Common subexpression
+
+      pixel_t denom_0 = v0_0 * v1_0 - v3_sq_0;
+      output[r][c].x = (term_v5_v3_0 - term_v4_v1_0) / denom_0;
+      output[r][c].y = (term_v4_v3_0 - term_v5_v0_0) / denom_0;
+
+      // Unrolled block 2 (for column 'c+1')
+      pixel_t v0_1 = tensors[r][c+1].val[0];
+      pixel_t v1_1 = tensors[r][c+1].val[1];
+      pixel_t v3_1 = tensors[r][c+1].val[3];
+      pixel_t v4_1 = tensors[r][c+1].val[4];
+      pixel_t v5_1 = tensors[r][c+1].val[5];
+
+      pixel_t v3_sq_1 = v3_1 * v3_1;
+      pixel_t term_v5_v3_1 = v5_1 * v3_1;
+      pixel_t term_v4_v1_1 = v4_1 * v1_1;
+      pixel_t term_v4_v3_1 = v4_1 * v3_1;
+      pixel_t term_v5_v0_1 = v5_1 * v0_1;
+
+      pixel_t denom_1 = v0_1 * v1_1 - v3_sq_1;
+      output[r][c+1].x = (term_v5_v3_1 - term_v4_v1_1) / denom_1;
+      output[r][c+1].y = (term_v4_v3_1 - term_v5_v0_1) / denom_1;
+
+      // Unrolled block 3 (for column 'c+2')
+      pixel_t v0_2 = tensors[r][c+2].val[0];
+      pixel_t v1_2 = tensors[r][c+2].val[1];
+      pixel_t v3_2 = tensors[r][c+2].val[3];
+      pixel_t v4_2 = tensors[r][c+2].val[4];
+      pixel_t v5_2 = tensors[r][c+2].val[5];
+
+      pixel_t v3_sq_2 = v3_2 * v3_2;
+      pixel_t term_v5_v3_2 = v5_2 * v3_2;
+      pixel_t term_v4_v1_2 = v4_2 * v1_2;
+      pixel_t term_v4_v3_2 = v4_2 * v3_2;
+      pixel_t term_v5_v0_2 = v5_2 * v0_2;
+
+      pixel_t denom_2 = v0_2 * v1_2 - v3_sq_2;
+      output[r][c+2].x = (term_v5_v3_2 - term_v4_v1_2) / denom_2;
+      output[r][c+2].y = (term_v4_v3_2 - term_v5_v0_2) / denom_2;
+
+      // Unrolled block 4 (for column 'c+3')
+      pixel_t v0_3 = tensors[r][c+3].val[0];
+      pixel_t v1_3 = tensors[r][c+3].val[1];
+      pixel_t v3_3 = tensors[r][c+3].val[3];
+      pixel_t v4_3 = tensors[r][c+3].val[4];
+      pixel_t v5_3 = tensors[r][c+3].val[5];
+
+      pixel_t v3_sq_3 = v3_3 * v3_3;
+      pixel_t term_v5_v3_3 = v5_3 * v3_3;
+      pixel_t term_v4_v1_3 = v4_3 * v1_3;
+      pixel_t term_v4_v3_3 = v4_3 * v3_3;
+      pixel_t term_v5_v0_3 = v5_3 * v0_3;
+
+      pixel_t denom_3 = v0_3 * v1_3 - v3_sq_3;
+      output[r][c+3].x = (term_v5_v3_3 - term_v4_v1_3) / denom_3;
+      output[r][c+3].y = (term_v4_v3_3 - term_v5_v0_3) / denom_3;
+    }
+
+    // Remainder loop for 'c' (handles columns not covered by the unrolled loop)
+    for (int c = c_unrolled_end; c < c_end_core; ++c)
+    {
+      // Original computation for a single element
+      pixel_t v0 = tensors[r][c].val[0];
+      pixel_t v1 = tensors[r][c].val[1];
+      pixel_t v3 = tensors[r][c].val[3];
+      pixel_t v4 = tensors[r][c].val[4];
+      pixel_t v5 = tensors[r][c].val[5];
+
+      pixel_t v3_sq = v3 * v3;
+      pixel_t term_v5_v3 = v5 * v3;
+      pixel_t term_v4_v1 = v4 * v1;
+      pixel_t term_v4_v3 = v4 * v3;
+      pixel_t term_v5_v0 = v5 * v0;
+
+      pixel_t denom = v0 * v1 - v3_sq;
+      output[r][c].x = (term_v5_v3 - term_v4_v1) / denom;
+      output[r][c].y = (term_v4_v3 - term_v5_v0) / denom;
+    }
+  }
+}
+```

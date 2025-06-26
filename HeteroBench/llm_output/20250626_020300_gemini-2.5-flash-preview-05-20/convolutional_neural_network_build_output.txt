@@ -1,0 +1,63 @@
+BUILD COMMAND: make run_simple
+STDOUT:
+clang++ -Wall -Wextra -pedantic -std=c++11 -fopenmp -w -DITERATIONS=1 -DCONV2D_STRIDE=1 -DCONV2D_PADDING=1 -DCONV2D_BIAS=0.1 -DPOOLING_SIZE=2 -DPOOLING_STRIDE=2 -DINPUT_SIZE_H=1024 -DINPUT_SIZE_W=2048 -DCONV_KERNEL_SIZE_H=3 -DCONV_KERNEL_SIZE_W=3 -DFULL_CONNECT_LAYER_SIZE_W=2048 -Icpu_impl/include -Icpu_impl_optimized/include -I. -c cpu_impl_optimized/conv2d_optimized.cpp -o cpu_impl_optimized/conv2d_optimized.o
+clang++ -Wall -Wextra -pedantic -std=c++11 -fopenmp -w -DITERATIONS=1 -DCONV2D_STRIDE=1 -DCONV2D_PADDING=1 -DCONV2D_BIAS=0.1 -DPOOLING_SIZE=2 -DPOOLING_STRIDE=2 -DINPUT_SIZE_H=1024 -DINPUT_SIZE_W=2048 -DCONV_KERNEL_SIZE_H=3 -DCONV_KERNEL_SIZE_W=3 -DFULL_CONNECT_LAYER_SIZE_W=2048 -Icpu_impl/include -Icpu_impl_optimized/include -I. -c cpu_impl_optimized/relu_optimized.cpp -o cpu_impl_optimized/relu_optimized.o
+clang++ -Wall -Wextra -pedantic -std=c++11 -fopenmp -w -DITERATIONS=1 -DCONV2D_STRIDE=1 -DCONV2D_PADDING=1 -DCONV2D_BIAS=0.1 -DPOOLING_SIZE=2 -DPOOLING_STRIDE=2 -DINPUT_SIZE_H=1024 -DINPUT_SIZE_W=2048 -DCONV_KERNEL_SIZE_H=3 -DCONV_KERNEL_SIZE_W=3 -DFULL_CONNECT_LAYER_SIZE_W=2048 -Icpu_impl/include -Icpu_impl_optimized/include -I. -c cpu_impl_optimized/max_pooling_optimized.cpp -o cpu_impl_optimized/max_pooling_optimized.o
+clang++ -Wall -Wextra -pedantic -std=c++11 -fopenmp -w -DITERATIONS=1 -DCONV2D_STRIDE=1 -DCONV2D_PADDING=1 -DCONV2D_BIAS=0.1 -DPOOLING_SIZE=2 -DPOOLING_STRIDE=2 -DINPUT_SIZE_H=1024 -DINPUT_SIZE_W=2048 -DCONV_KERNEL_SIZE_H=3 -DCONV_KERNEL_SIZE_W=3 -DFULL_CONNECT_LAYER_SIZE_W=2048 -Icpu_impl/include -Icpu_impl_optimized/include -I. -c cpu_impl_optimized/pad_input_optimized.cpp -o cpu_impl_optimized/pad_input_optimized.o
+clang++ -Wall -Wextra -pedantic -std=c++11 -fopenmp -w -DITERATIONS=1 -DCONV2D_STRIDE=1 -DCONV2D_PADDING=1 -DCONV2D_BIAS=0.1 -DPOOLING_SIZE=2 -DPOOLING_STRIDE=2 -DINPUT_SIZE_H=1024 -DINPUT_SIZE_W=2048 -DCONV_KERNEL_SIZE_H=3 -DCONV_KERNEL_SIZE_W=3 -DFULL_CONNECT_LAYER_SIZE_W=2048 -Icpu_impl/include -Icpu_impl_optimized/include -I. -c cpu_impl_optimized/dot_add_optimized.cpp -o cpu_impl_optimized/dot_add_optimized.o
+clang++ -Wall -Wextra -pedantic -std=c++11 -fopenmp -w -DITERATIONS=1 -DCONV2D_STRIDE=1 -DCONV2D_PADDING=1 -DCONV2D_BIAS=0.1 -DPOOLING_SIZE=2 -DPOOLING_STRIDE=2 -DINPUT_SIZE_H=1024 -DINPUT_SIZE_W=2048 -DCONV_KERNEL_SIZE_H=3 -DCONV_KERNEL_SIZE_W=3 -DFULL_CONNECT_LAYER_SIZE_W=2048 -Icpu_impl/include -Icpu_impl_optimized/include -I. -c cpu_impl_optimized/softmax_optimized.cpp -o cpu_impl_optimized/softmax_optimized.o
+clang++ -fopenmp -o cnn_sw_simple main_simple.o cpu_impl/conv2d.o cpu_impl/relu.o cpu_impl/max_pooling.o cpu_impl/pad_input.o cpu_impl/dot_add.o cpu_impl/softmax.o cpu_impl_optimized/conv2d_optimized.o cpu_impl_optimized/relu_optimized.o cpu_impl_optimized/max_pooling_optimized.o cpu_impl_optimized/pad_input_optimized.o cpu_impl_optimized/dot_add_optimized.o cpu_impl_optimized/softmax_optimized.o -lgomp
+./cnn_sw_simple /work/shared/users/ugrad/msz49/HeteroBench2/HeteroBench/benchmarks/convolutional_neural_network/input /work/shared/users/ugrad/msz49/HeteroBench2/HeteroBench/benchmarks/convolutional_neural_network/output
+=======================================
+Running cnn benchmark C++ Serial
+=======================================
+Running 1 warm up iteration for original implementation...
+Done
+Checking original implementation results...
+Checking conv_output... Correct
+Checking relu_output... Correct
+Checking pool_output... Correct
+Checking flattened_output... Correct
+Checking fc_output... Correct
+Checking softmax_output... Correct
+Running 1 warm up iteration for optimized implementation...
+Done
+Checking optimized implementation results...
+Checking conv_output... Correct
+Checking relu_output... Correct
+Checking pool_output... Correct
+Checking flattened_output... Correct
+Checking fc_output... Correct
+Checking softmax_output... Correct
+Running 1 iterations for performance measurement...
+Running original implementation...
+Done
+Running optimized implementation...
+Done
+=======================================
+Performance Results:
+=======================================
+Original Implementation:
+  conv2d kernel time: 0.0891311 seconds
+  relu kernel time: 0.00788283 seconds
+  max_pooling kernel time: 0.0176129 seconds
+  dot_add kernel time: 24.554 seconds
+  softmax kernel time: 2.11149e-05 seconds
+  Single iteration time: 24.6687 seconds
+Optimized Implementation:
+  conv2d kernel time: 0.0709503 seconds
+  relu kernel time: 0.00663612 seconds
+  max_pooling kernel time: 0.0177368 seconds
+  dot_add kernel time: 4.08534 seconds
+  softmax kernel time: 2.00495e-05 seconds
+  Single iteration time: 4.18068 seconds
+Speedup:
+  conv2d kernel: 1.25625x
+  relu kernel: 1.18787x
+  max_pooling kernel: 0.993013x
+  dot_add kernel: 6.01028x
+  softmax kernel: 1.05314x
+  Total: 5.90063x
+Whole time: 28.8516 seconds
+
+STDERR:

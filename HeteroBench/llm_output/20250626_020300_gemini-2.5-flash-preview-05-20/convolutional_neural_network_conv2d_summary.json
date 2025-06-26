@@ -1,0 +1,47 @@
+{
+  "function_name": "conv2d",
+  "original_file_path": "benchmarks/convolutional_neural_network/homobackend_cpu/Cpp/cpu_impl/conv2d.cpp",
+  "optimized_file_path": "benchmarks/convolutional_neural_network/homobackend_cpu/Cpp/cpu_impl_optimized/conv2d_optimized.cpp",
+  "status": {
+    "function_generation_success": true,
+    "compilation_success": false,
+    "execution_success": false,
+    "verification_success": false
+  },
+  "statistics": {
+    "num_code_blocks_generated": 1,
+    "optimized_code_length": 3934,
+    "prompt_length": 6032,
+    "llm_response_length": 3945
+  },
+  "details": {
+    "entire_llm_response": {
+      "model": "gemini-2.5-flash-preview-05-20",
+      "provider": "google",
+      "temperature": 0.0,
+      "max_tokens": 65536,
+      "response": {
+        "id": "E-VcaI2eOqPTjMcPntT1qAk",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "```cpp\nvoid conv2d_optimized(double *conv2d_input, double *conv2d_kernel, double *input_padded, double conv2d_bias, int stride, int padding, int input_h, int input_w, int kernel_h, int kernel_w, double *conv2d_output)\n{\n  // Pre-calculate constants that are invariant across the outer loops.\n  // This reduces redundant calculations inside the loops (strength reduction).\n  const int padded_input_w = input_w + 2 * padding;\n  const int output_h = (input_h + 2 * padding - kernel_h) / stride + 1;\n  const int output_w = (input_w + 2 * padding - kernel_w) / stride + 1;\n\n  // The pad_input function is called once before the main convolution loops.\n  // Its implementation is assumed to be correct and efficient.\n  pad_input(conv2d_input, input_padded, input_h, input_w, padding);\n\n  // Define an unrolling factor for the innermost 'l' loop.\n  // Unrolling helps expose Instruction-Level Parallelism (ILP) to the CPU's\n  // out-of-order execution engine and reduces loop overhead.\n  // A factor of 4 is chosen as a common sweet spot for scalar double operations,\n  // balancing ILP benefits with code size and register pressure.\n  const int UNROLL_L = 4; \n\n  // Iterate over the output height\n  for (int i = 0; i < output_h; ++i) {\n    // Calculate the base row offset for accessing `input_padded` for the current `i`.\n    // This offset is invariant for the `j`, `k`, and `l` loops.\n    const int input_row_base_offset = i * stride * padded_input_w;\n\n    // Iterate over the output width\n    for (int j = 0; j < output_w; ++j) {\n      double tmp = 0.0; // Accumulator for the current output pixel value\n\n      // Calculate the base column offset for accessing `input_padded` for the current `j`.\n      // This offset is invariant for the `k` and `l` loops.\n      const int input_col_base_offset = j * stride;\n\n      // Iterate over the kernel height\n      for (int k = 0; k < kernel_h; ++k) {\n        // Calculate the row offset within the `input_padded` region for the current `k`.\n        // This offset is invariant for the `l` loop.\n        const int input_k_offset = k * padded_input_w;\n        // Calculate the row offset within `conv2d_kernel` for the current `k`.\n        // This offset is invariant for the `l` loop.\n        const int kernel_k_offset = k * kernel_w;\n\n        // Pre-calculate pointers to the start of the current row in the relevant\n        // `input_padded` region and the current row in the `conv2d_kernel`.\n        // Using pointers and pre-calculating offsets reduces address calculation\n        // complexity inside the innermost loop.\n        const double *current_input_row_ptr = input_padded + input_row_base_offset + input_col_base_offset + input_k_offset;\n        const double *current_kernel_row_ptr = conv2d_kernel + kernel_k_offset;\n\n        // Unroll the innermost 'l' loop.\n        // This allows the CPU to fetch multiple data items and perform multiple\n        // independent multiply operations in parallel, improving ILP.\n        // The additions are kept sequential to maintain exact floating-point\n        // summation order, ensuring bit-exact functional equivalence.\n        int l = 0;\n        for (; l + UNROLL_L <= kernel_w; l += UNROLL_L) {\n          tmp += current_input_row_ptr[l]     * current_kernel_row_ptr[l];\n          tmp += current_input_row_ptr[l + 1] * current_kernel_row_ptr[l + 1];\n          tmp += current_input_row_ptr[l + 2] * current_kernel_row_ptr[l + 2];\n          tmp += current_input_row_ptr[l + 3] * current_kernel_row_ptr[l + 3];\n        }\n        // Handle any remaining elements if `kernel_w` is not a multiple of `UNROLL_L`.\n        for (; l < kernel_w; ++l) {\n          tmp += current_input_row_ptr[l] * current_kernel_row_ptr[l];\n        }\n      }\n      // Store the accumulated sum plus bias to the output array.\n      // This access is contiguous for the 'j' loop, which is cache-friendly.\n      conv2d_output[i * output_w + j] = tmp + conv2d_bias;\n    }\n  }\n}\n```",
+              "function_call": null,
+              "tool_calls": null
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "created": 1750918419,
+        "model": "gemini-2.5-flash-preview-05-20",
+        "usage": {
+          "prompt_tokens": 1826,
+          "completion_tokens": 1144,
+          "total_tokens": 10178
+        }
+      }
+    }
+  }
+}

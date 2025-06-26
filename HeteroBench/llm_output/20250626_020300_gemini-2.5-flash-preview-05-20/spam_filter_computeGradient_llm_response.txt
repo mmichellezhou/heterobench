@@ -1,0 +1,34 @@
+```cpp
+void computeGradient_optimized(
+    FeatureType grad[NUM_FEATURES],
+    DataType    feature[NUM_FEATURES],
+    FeatureType scale)
+{
+  // Unroll factor chosen to expose instruction-level parallelism and reduce loop overhead.
+  // This factor allows multiple independent floating-point operations to be
+  // scheduled concurrently by the CPU's out-of-order execution engine.
+  const int UNROLL_FACTOR = 8; 
+
+  int i = 0;
+  // Main loop unrolled to process UNROLL_FACTOR elements per iteration.
+  // This reduces the number of loop control instructions (branch, increment)
+  // and provides more operations for the CPU to execute in parallel.
+  for (; i + UNROLL_FACTOR <= NUM_FEATURES; i += UNROLL_FACTOR) {
+    grad[i]     = scale * feature[i];
+    grad[i+1]   = scale * feature[i+1];
+    grad[i+2]   = scale * feature[i+2];
+    grad[i+3]   = scale * feature[i+3];
+    grad[i+4]   = scale * feature[i+4];
+    grad[i+5]   = scale * feature[i+5];
+    grad[i+6]   = scale * feature[i+6];
+    grad[i+7]   = scale * feature[i+7];
+  }
+
+  // Remainder loop to handle any elements not processed by the unrolled loop.
+  // This ensures functional equivalence for NUM_FEATURES not perfectly divisible
+  // by UNROLL_FACTOR.
+  for (; i < NUM_FEATURES; i++) {
+    grad[i] = scale * feature[i];
+  }
+}
+```

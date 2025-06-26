@@ -1,0 +1,47 @@
+{
+  "function_name": "sobel_filter_y",
+  "original_file_path": "benchmarks/sobel_filter/homobackend_cpu/Cpp/cpu_impl/sobel_filter_y.cpp",
+  "optimized_file_path": "benchmarks/sobel_filter/homobackend_cpu/Cpp/cpu_impl_optimized/sobel_filter_y_optimized.cpp",
+  "status": {
+    "function_generation_success": true,
+    "compilation_success": false,
+    "execution_success": false,
+    "verification_success": false
+  },
+  "statistics": {
+    "num_code_blocks_generated": 1,
+    "optimized_code_length": 4472,
+    "prompt_length": 4214,
+    "llm_response_length": 4483
+  },
+  "details": {
+    "entire_llm_response": {
+      "model": "gemini-2.5-flash-preview-05-20",
+      "provider": "google",
+      "temperature": 0.0,
+      "max_tokens": 65536,
+      "response": {
+        "id": "t-lcaOr6OIO21MkP_7GV0Qc",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "```cpp\nvoid sobel_filter_y_optimized(const uint8_t *input_image, int height, int width, double *sobel_y) {\n  // Use ptrdiff_t for indices to avoid potential overflow with very large width/height\n  // and for better pointer arithmetic on 64-bit systems.\n  // ptrdiff_t is a standard C++ type and is generally available in a C++ environment.\n  const ptrdiff_t p_width = width;\n\n  // Loop over rows, skipping border rows (row 0 and height-1) as the Sobel filter\n  // requires a 3x3 neighborhood.\n  for (int row = 1; row < height - 1; ++row) {\n    // Pre-calculate row pointers for the current row's neighbors and the output row.\n    // This is a form of strength reduction, avoiding repeated multiplications by 'width'\n    // inside the inner column loop and improving memory access locality by using direct pointers.\n    const uint8_t *p_row_minus_1 = input_image + (ptrdiff_t)(row - 1) * p_width;\n    const uint8_t *p_row_plus_1  = input_image + (ptrdiff_t)(row + 1) * p_width;\n    double *p_sobel_y_row        = sobel_y     + (ptrdiff_t)row * p_width;\n\n    // Define loop bounds for the column loop.\n    // The inner loop processes columns from 1 to width - 2 (inclusive).\n    const int col_start = 1;\n    const int col_end   = width - 2;\n\n    // Unroll factor for the column loop to expose Instruction-Level Parallelism (ILP)\n    // and reduce loop overhead. A factor of 4 is chosen as a common effective unroll amount.\n    const int unroll_factor = 4;\n\n    // Calculate the limit for the unrolled loop.\n    // This ensures that we only process full blocks of 'unroll_factor' columns.\n    const int num_iterations = col_end - col_start + 1;\n    const int num_full_blocks = num_iterations / unroll_factor;\n    const int col_unroll_limit = col_start + num_full_blocks * unroll_factor - 1;\n\n    // Unrolled loop for processing columns in blocks of 'unroll_factor'.\n    // The 3x3 convolution is fully unrolled and simplified by observing that\n    // the middle row of the kernel_y is all zeros, thus its contribution is zero.\n    // This eliminates two inner loops and 3 multiplications/additions per pixel.\n    for (int col = col_start; col <= col_unroll_limit; col += unroll_factor) {\n      // Calculate gy for current column 'col'\n      double gy0 = 0;\n      gy0 += (int)p_row_minus_1[col - 1] * (-1);\n      gy0 += (int)p_row_minus_1[col    ] * (-2);\n      gy0 += (int)p_row_minus_1[col + 1] * (-1);\n      gy0 += (int)p_row_plus_1[col - 1] * ( 1);\n      gy0 += (int)p_row_plus_1[col    ] * ( 2);\n      gy0 += (int)p_row_plus_1[col + 1] * ( 1);\n      p_sobel_y_row[col] = gy0;\n\n      // Calculate gy for column 'col + 1'\n      double gy1 = 0;\n      gy1 += (int)p_row_minus_1[col    ] * (-1); // Corresponds to (col+1)-1\n      gy1 += (int)p_row_minus_1[col + 1] * (-2); // Corresponds to (col+1)\n      gy1 += (int)p_row_minus_1[col + 2] * (-1); // Corresponds to (col+1)+1\n      gy1 += (int)p_row_plus_1[col    ] * ( 1);\n      gy1 += (int)p_row_plus_1[col + 1] * ( 2);\n      gy1 += (int)p_row_plus_1[col + 2] * ( 1);\n      p_sobel_y_row[col + 1] = gy1;\n\n      // Calculate gy for column 'col + 2'\n      double gy2 = 0;\n      gy2 += (int)p_row_minus_1[col + 1] * (-1);\n      gy2 += (int)p_row_minus_1[col + 2] * (-2);\n      gy2 += (int)p_row_minus_1[col + 3] * (-1);\n      gy2 += (int)p_row_plus_1[col + 1] * ( 1);\n      gy2 += (int)p_row_plus_1[col + 2] * ( 2);\n      gy2 += (int)p_row_plus_1[col + 3] * ( 1);\n      p_sobel_y_row[col + 2] = gy2;\n\n      // Calculate gy for column 'col + 3'\n      double gy3 = 0;\n      gy3 += (int)p_row_minus_1[col + 2] * (-1);\n      gy3 += (int)p_row_minus_1[col + 3] * (-2);\n      gy3 += (int)p_row_minus_1[col + 4] * (-1);\n      gy3 += (int)p_row_plus_1[col + 2] * ( 1);\n      gy3 += (int)p_row_plus_1[col + 3] * ( 2);\n      gy3 += (int)p_row_plus_1[col + 4] * ( 1);\n      p_sobel_y_row[col + 3] = gy3;\n    }\n\n    // Cleanup loop for any remaining columns that didn't fit into full unrolled blocks.\n    // This ensures all pixels are processed correctly, even for image widths not\n    // perfectly divisible by the unroll factor.\n    for (int col = col_unroll_limit + 1; col <= col_end; ++col) {\n      double gy = 0;\n      gy += (int)p_row_minus_1[col - 1] * (-1);\n      gy += (int)p_row_minus_1[col    ] * (-2);\n      gy += (int)p_row_minus_1[col + 1] * (-1);\n      gy += (int)p_row_plus_1[col - 1] * ( 1);\n      gy += (int)p_row_plus_1[col    ] * ( 2);\n      gy += (int)p_row_plus_1[col + 1] * ( 1);\n      p_sobel_y_row[col] = gy;\n    }\n  }\n}\n```",
+              "function_call": null,
+              "tool_calls": null
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "created": 1750919608,
+        "model": "gemini-2.5-flash-preview-05-20",
+        "usage": {
+          "prompt_tokens": 1229,
+          "completion_tokens": 1692,
+          "total_tokens": 12139
+        }
+      }
+    }
+  }
+}

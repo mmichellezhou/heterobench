@@ -1,0 +1,47 @@
+{
+  "function_name": "transpose",
+  "original_file_path": "benchmarks/one_head_attention/homobackend_cpu/Cpp/cpu_impl/transpose.cpp",
+  "optimized_file_path": "benchmarks/one_head_attention/homobackend_cpu/Cpp/cpu_impl_optimized/transpose_optimized.cpp",
+  "status": {
+    "function_generation_success": true,
+    "compilation_success": false,
+    "execution_success": false,
+    "verification_success": false
+  },
+  "statistics": {
+    "num_code_blocks_generated": 1,
+    "optimized_code_length": 5057,
+    "prompt_length": 5274,
+    "llm_response_length": 5068
+  },
+  "details": {
+    "entire_llm_response": {
+      "model": "gemini-2.5-flash-preview-05-20",
+      "provider": "google",
+      "temperature": 0.0,
+      "max_tokens": 65536,
+      "response": {
+        "id": "LOdcaIqGMu6o1MkPzKLN6QQ",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "```cpp\nvoid transpose_optimized(double *transpose_x, double *transpose_output, \n                int batch_size, int input_h, int input_w, int dim0, int dim1) {\n    if (dim0 == -2 && dim1 == -1) {\n        // TILE_SIZE is chosen to ensure that a block of data (both input and output)\n        // fits comfortably within the L1 data cache (1.5MB on Intel Xeon Gold 6248R).\n        // For 64x64 doubles (8 bytes each), the total data for a tile is 2 * 64 * 64 * 8 bytes = 65536 bytes = 64KB.\n        // This allows for high cache hit rates during the inner tile processing.\n        const int TILE_SIZE = 64;\n        \n        // UNROLL_FACTOR is used to reduce loop overhead and expose more instruction-level parallelism\n        // to the CPU's execution units. Since vectorization is disallowed, this helps scalar performance.\n        // A factor of 4 is a common choice for scalar unrolling.\n        const int UNROLL_FACTOR = 4;\n\n        // Use long long for dimensions and products to prevent potential integer overflow\n        // when calculating large memory offsets. The product of input_h and input_w\n        // can exceed the maximum value of a 32-bit integer (INT_MAX) if dimensions are large.\n        const long long input_h_ll = input_h;\n        const long long input_w_ll = input_w;\n        const long long input_hw_product = input_h_ll * input_w_ll;\n\n        for (int i = 0; i < batch_size; i++) {\n            // Calculate base pointers for the current batch once per batch iteration.\n            // This is a form of strength reduction, avoiding repeated multiplication inside inner loops.\n            // Pointer arithmetic automatically scales by sizeof(double).\n            double* current_x_batch_base = transpose_x + i * input_hw_product;\n            double* current_output_batch_base = transpose_output + i * input_hw_product;\n\n            // Apply tiling to the 'k' and 'j' loops to improve cache locality.\n            // The loop order is transformed from (i, j, k) to (i, kk, jj, k, j).\n            // This new order ensures that the innermost loop ('j') accesses 'transpose_output'\n            // contiguously, which is generally beneficial for write performance.\n            for (int kk = 0; kk < input_w; kk += TILE_SIZE) { // Outer loop for 'k' tiles\n                for (int jj = 0; jj < input_h; jj += TILE_SIZE) { // Outer loop for 'j' tiles\n                    // Inner loops for processing the current tile.\n                    // The 'k' loop iterates over columns of the output sub-matrix (which correspond to rows of the input sub-matrix).\n                    // Use a ternary operator for min-like behavior, as <algorithm> header is not allowed.\n                    int k_limit = (kk + TILE_SIZE < input_w) ? (kk + TILE_SIZE) : input_w;\n                    for (int k = kk; k < k_limit; k++) {\n                        // Calculate the 'k'-dependent offset for 'transpose_output' once per 'k' iteration.\n                        // This is another application of strength reduction.\n                        long long output_k_offset = (long long)k * input_h_ll;\n\n                        // The 'j' loop iterates over rows of the output sub-matrix (columns of the input sub-matrix).\n                        // This is the innermost loop and is designed to access 'transpose_output' contiguously.\n                        // The loop is unrolled to reduce loop overhead and expose ILP.\n                        int j_limit = (jj + TILE_SIZE < input_h) ? (jj + TILE_SIZE) : input_h;\n                        for (int j = jj; j < j_limit; j += UNROLL_FACTOR) {\n                            // Unrolled body: process UNROLL_FACTOR elements at a time.\n                            for (int u = 0; u < UNROLL_FACTOR; ++u) {\n                                int current_j = j + u;\n                                // Check bounds for the unrolled iteration to handle tail cases\n                                // where the remaining elements are fewer than UNROLL_FACTOR.\n                                if (current_j < j_limit) {\n                                    // Calculate the 'j'-dependent offset for 'transpose_x' once per unrolled iteration.\n                                    // This is also a form of strength reduction.\n                                    long long input_j_offset = (long long)current_j * input_w_ll;\n\n                                    // Perform the transpose operation: transpose_output[i][k][j] = transpose_x[i][j][k]\n                                    current_output_batch_base[output_k_offset + current_j] =\n                                        current_x_batch_base[input_j_offset + k];\n                                }\n                            }\n                        }\n                    }\n                }\n            }\n        }\n    } else {\n        // This part of the code is not optimized as per the problem statement's focus,\n        // which is specifically on the dim0 == -2 && dim1 == -1 case.\n        ::std::cout << \"Not implemented yet for dim0 != -2 or dim1 != -1\" << ::std::endl;\n    }\n}\n```",
+              "function_call": null,
+              "tool_calls": null
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "created": 1750918956,
+        "model": "gemini-2.5-flash-preview-05-20",
+        "usage": {
+          "prompt_tokens": 1451,
+          "completion_tokens": 1253,
+          "total_tokens": 12095
+        }
+      }
+    }
+  }
+}

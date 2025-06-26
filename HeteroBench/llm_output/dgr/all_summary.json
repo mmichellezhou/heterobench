@@ -13,9 +13,9 @@
     },
     "performance_analysis": {
       "verification_success": true,
-      "original_time": 0.000756096,
-      "optimized_time": 0.000350075,
-      "speedup": 2.15981,
+      "original_time": 0.000779568,
+      "optimized_time": 0.000349794,
+      "speedup": 2.22865,
       "build_success": true
     },
     "overall_status": {
@@ -24,6 +24,6 @@
       "build_success": true,
       "verification_success": true
     },
-    "speedup": 2.15981
+    "speedup": 2.22865
   }
 }

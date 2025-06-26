@@ -4,55 +4,71 @@ void max_pooling_optimized(double *max_pooling_input, int pool_size, int pool_st
   int output_h = (input_h - pool_size) / pool_stride + 1;
   int output_w = (input_w - pool_size) / pool_stride + 1;
 
+  // Unroll factor for the innermost loop.
+  // A factor of 4 is chosen to expose instruction-level parallelism for double operations
+  // and to utilize cache lines effectively (a cache line is typically 64 bytes,
+  // which holds 8 doubles. Unrolling by 4 processes half a cache line at a time,
+  // allowing for prefetching and parallel loads).
+  const int UNROLL_L = 4; 
+
   for (int i = 0; i < output_h; i++) {
-    // Strength Reduction: Pre-calculate the starting row offset for the current pooling window.
-    // This is (i * pool_stride) * input_w, which is invariant for the inner 'j' loop.
-    // Using pointer arithmetic directly from max_pooling_input for efficiency.
-    const double* input_row_base_ptr = max_pooling_input + (long long)i * pool_stride * input_w;
+    // Strength Reduction: Calculate the base offset for the current input row block once per outer loop iteration.
+    // Using long long for offset calculation to prevent potential overflow
+    // if input_h, pool_stride, or input_w are very large, ensuring correct pointer arithmetic.
+    long long input_row_base_offset = (long long)i * pool_stride * input_w;
+    
+    // Register Optimization: Pre-calculate the pointer to the start of the current output row.
+    // This keeps the output pointer in a register and avoids repeated calculations.
+    double *current_output_row_ptr = max_pooling_output + i * output_w;
 
     for (int j = 0; j < output_w; j++) {
-      // Strength Reduction: Pre-calculate the starting column offset for the current pooling window.
-      // This is j * pool_stride.
-      const int current_window_col_start_offset = j * pool_stride;
+      // Strength Reduction: Calculate the base column offset for the current input column block once per iteration.
+      int input_col_base_offset = j * pool_stride;
 
-      // Pointer Optimization: Calculate the pointer to the very first element of the current pooling region.
-      const double* region_start_ptr = input_row_base_ptr + current_window_col_start_offset;
+      double max_val;
 
-      // Register Optimization & Instruction-Level Parallelism:
-      // Initialize multiple accumulators for scalar unrolling.
-      // All accumulators are initialized with the first element of the region (region_start_ptr[0]).
-      // This ensures functional equivalence with np.max (correctly handling negative numbers)
-      // and simplifies boundary conditions for small pool_size values.
-      double max_val0 = region_start_ptr[0];
-      double max_val1 = max_val0;
-      double max_val2 = max_val0;
-      double max_val3 = max_val0;
+      // Functional Equivalence & Correctness: Initialize max_val with the first element of the current pooling region.
+      // This correctly handles negative input values, unlike initializing with 0, matching numpy's behavior.
+      max_val = max_pooling_input[input_row_base_offset + input_col_base_offset];
 
-      // Loop Transformation: Iterate over the rows within the pool_size x pool_size region.
+      // Loop over rows within the pooling window.
       for (int k = 0; k < pool_size; k++) {
-        // Strength Reduction & Pointer Optimization: Calculate the pointer to the start of the current row within the region.
-        // This avoids repeated multiplication (k * input_w) inside the innermost loop.
-        const double* current_row_ptr = region_start_ptr + (long long)k * input_w;
+        // Strength Reduction & Register Optimization: Pre-calculate the pointer to the start of the current row
+        // within the input window. This avoids repeated multiplication inside the inner loop and keeps the pointer in a register.
+        double *current_input_row_ptr = max_pooling_input + input_row_base_offset + (long long)k * input_w;
 
-        int l = 0;
-        // Loop Unrolling: Unroll the innermost loop by 4 to expose more instruction-level parallelism.
-        // Each accumulator processes a different element in parallel, reducing loop overhead and
-        // allowing the CPU's out-of-order execution engine to find independent operations.
-        for (; l + 3 < pool_size; l += 4) {
-          max_val0 = std::max(max_val0, current_row_ptr[l]);
-          max_val1 = std::max(max_val1, current_row_ptr[l+1]);
-          max_val2 = std::max(max_val2, current_row_ptr[l+2]);
-          max_val3 = std::max(max_val3, current_row_ptr[l+3]);
-        }
-        // Cleanup loop for remaining elements if pool_size is not a multiple of 4.
-        for (; l < pool_size; l++) {
-          max_val0 = std::max(max_val0, current_row_ptr[l]);
+        // Loop Transformation: Determine the starting column index for the inner loop.
+        // If it's the first row (k=0), we start from column 1 because column 0 (l=0)
+        // was already used to initialize max_val. Otherwise, start from column 0.
+        int l_start = (k == 0) ? 1 : 0;
+
+        // Loop Unrolling & Instruction-Level Parallelism: Loop over columns within the pooling window with unrolling.
+        // This reduces loop overhead and exposes multiple independent `std::max` operations,
+        // allowing the CPU to execute them in parallel if resources are available.
+        for (int l = l_start; l < pool_size; l += UNROLL_L) {
+          // Process UNROLL_L columns.
+          // Each std::max operation is independent, allowing the CPU to execute them
+          // in parallel (Instruction-Level Parallelism) if resources are available.
+          
+          // Element 0
+          max_val = std::max(max_val, current_input_row_ptr[input_col_base_offset + l]);
+
+          // Element 1
+          if (l + 1 < pool_size) {
+            max_val = std::max(max_val, current_input_row_ptr[input_col_base_offset + l + 1]);
+          }
+          // Element 2
+          if (l + 2 < pool_size) {
+            max_val = std::max(max_val, current_input_row_ptr[input_col_base_offset + l + 2]);
+          }
+          // Element 3
+          if (l + 3 < pool_size) {
+            max_val = std::max(max_val, current_input_row_ptr[input_col_base_offset + l + 3]);
+          }
         }
       }
-
-      // Combine the results from the multiple accumulators to get the final maximum value for the region.
-      double final_max_val = std::max(std::max(max_val0, max_val1), std::max(max_val2, max_val3));
-      max_pooling_output[i * output_w + j] = final_max_val;
+      // Store the maximum value found for the current output pixel.
+      current_output_row_ptr[j] = max_val;
     }
   }
 }

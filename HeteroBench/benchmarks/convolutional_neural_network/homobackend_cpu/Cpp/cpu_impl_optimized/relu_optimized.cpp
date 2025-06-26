@@ -1,31 +1,22 @@
 #include "cpu_impl.h"
 
 void relu_optimized(double *relu_input, double *relu_output, int size) {
-  int i;
-  // Loop unrolling is applied to reduce loop overhead (branching, incrementing)
-  // and expose instruction-level parallelism (ILP). For simple element-wise
-  // operations like ReLU, where memory access is sequential and the computation
-  // per element is minimal, unrolling helps by allowing the CPU to keep more
-  // operations in flight and hide memory latencies.
-  //
-  // The 'std::max' function is used, relying on the compiler to generate efficient
-  // scalar code. Explicit vectorization (processing multiple data elements
-  // simultaneously with packed SIMD instructions) is avoided as per the
-  // problem's constraints.
-  
-  // Define the unroll factor. A factor of 8 is chosen as it's a common and
-  // effective unroll factor for double-precision floating-point operations
-  // on modern CPUs, balancing ILP exposure with potential register pressure.
-  const int unroll_factor = 8; 
-  
-  // Calculate the loop limit for the unrolled main loop.
-  // This ensures that the main loop processes chunks of 'unroll_factor' elements.
-  int limit = size - (size % unroll_factor); 
+  // Unrolling the loop to reduce loop overhead (branching, index increment)
+  // and expose Instruction-Level Parallelism (ILP). This allows the CPU to
+  // schedule multiple independent load, compute (max), and store operations
+  // concurrently, making better use of execution units.
+  // An unroll factor of 8 is chosen as a common balance for scalar double
+  // operations on modern x86-64 architectures, considering the number of
+  // available execution ports for loads, stores, and floating-point operations.
+  const int unroll_factor = 8;
+  int i = 0;
 
-  // Main loop: Process elements in unrolled chunks
-  for (i = 0; i < limit; i += unroll_factor) {
-    // Unrolled block for 8 double elements.
-    // Each operation is independent, allowing the CPU to execute them in parallel.
+  // Process elements in chunks of 'unroll_factor'.
+  // This loop handles the main bulk of the data, where 'size' is large enough.
+  for (; i + (unroll_factor - 1) < size; i += unroll_factor) {
+    // Each of these operations is independent of the others within the same
+    // unrolled iteration, allowing the CPU's out-of-order execution engine
+    // to pipeline them efficiently.
     relu_output[i] = std::max(0.0, relu_input[i]);
     relu_output[i+1] = std::max(0.0, relu_input[i+1]);
     relu_output[i+2] = std::max(0.0, relu_input[i+2]);
@@ -36,8 +27,8 @@ void relu_optimized(double *relu_input, double *relu_output, int size) {
     relu_output[i+7] = std::max(0.0, relu_input[i+7]);
   }
 
-  // Remainder loop: Process any remaining elements that did not fit into
-  // the unrolled chunks (i.e., 'size % unroll_factor' elements).
+  // Handle any remaining elements that did not fit into the unrolled loop.
+  // This ensures functional equivalence for all possible 'size' values.
   for (; i < size; i++) {
     relu_output[i] = std::max(0.0, relu_input[i]);
   }

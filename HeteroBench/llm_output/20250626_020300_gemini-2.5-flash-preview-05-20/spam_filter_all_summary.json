@@ -1,0 +1,14 @@
+{
+  "Sigmoid": {
+    "function_generation_success": true
+  },
+  "computeGradient": {
+    "function_generation_success": true
+  },
+  "dotProduct": {
+    "function_generation_success": true
+  },
+  "updateParameter": {
+    "function_generation_success": true
+  }
+}

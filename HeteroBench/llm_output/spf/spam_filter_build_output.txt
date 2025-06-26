@@ -1,0 +1,46 @@
+BUILD COMMAND: make run_simple
+STDOUT:
+clang++ -Wall -Wextra -pedantic -std=c++11 -fopenmp -w -DITERATIONS=1 -DNUM_FEATURES=10000 -DNUM_SAMPLES=5000 -DNUM_TRAINING=4500 -DNUM_TESTING=500 -DSTEP_SIZE=60000 -DNUM_EPOCHS=5 -Icpu_impl/include -Icpu_impl_optimized/include -c cpu_impl_optimized/dotProduct_optimized.cpp -o cpu_impl_optimized/dotProduct_optimized.o
+clang++ -Wall -Wextra -pedantic -std=c++11 -fopenmp -w -DITERATIONS=1 -DNUM_FEATURES=10000 -DNUM_SAMPLES=5000 -DNUM_TRAINING=4500 -DNUM_TESTING=500 -DSTEP_SIZE=60000 -DNUM_EPOCHS=5 -Icpu_impl/include -Icpu_impl_optimized/include -c cpu_impl_optimized/Sigmoid_optimized.cpp -o cpu_impl_optimized/Sigmoid_optimized.o
+clang++ -Wall -Wextra -pedantic -std=c++11 -fopenmp -w -DITERATIONS=1 -DNUM_FEATURES=10000 -DNUM_SAMPLES=5000 -DNUM_TRAINING=4500 -DNUM_TESTING=500 -DSTEP_SIZE=60000 -DNUM_EPOCHS=5 -Icpu_impl/include -Icpu_impl_optimized/include -c cpu_impl_optimized/computeGradient_optimized.cpp -o cpu_impl_optimized/computeGradient_optimized.o
+clang++ -Wall -Wextra -pedantic -std=c++11 -fopenmp -w -DITERATIONS=1 -DNUM_FEATURES=10000 -DNUM_SAMPLES=5000 -DNUM_TRAINING=4500 -DNUM_TESTING=500 -DSTEP_SIZE=60000 -DNUM_EPOCHS=5 -Icpu_impl/include -Icpu_impl_optimized/include -c cpu_impl_optimized/updateParameter_optimized.cpp -o cpu_impl_optimized/updateParameter_optimized.o
+clang++ -fopenmp -o spf_sw_simple main_simple.o cpu_impl/dotProduct.o cpu_impl/Sigmoid.o cpu_impl/computeGradient.o cpu_impl/updateParameter.o cpu_impl_optimized/dotProduct_optimized.o cpu_impl_optimized/Sigmoid_optimized.o cpu_impl_optimized/computeGradient_optimized.o cpu_impl_optimized/updateParameter_optimized.o -lgomp
+./spf_sw_simple -p /work/shared/users/ugrad/msz49/HeteroBench2/HeteroBench/benchmarks/spam_filter/data
+=======================================
+Running spam_filter benchmark C++ Serial
+=======================================
+Running 1 warm up iteration for original implementation...
+Done
+Running 1 warm up iteration for optimized implementation...
+Done
+Comparing original and optimized results...
+Parameter vector: Pass (Original and optimized match)
+Running 1 iterations for performance measurement...
+Running original implementation...
+Done
+Running optimized implementation...
+Done
+=======================================
+Performance Results:
+=======================================
+Original Implementation:
+  dotProduct time: 0.102075 seconds
+  Sigmoid time: 0.000149053 seconds
+  computeGradient time: 0.0726575 seconds
+  updateParameter time: 0.0817648 seconds
+  Single iteration time: 0.256646 seconds
+Optimized Implementation:
+  dotProduct time: 0.046639 seconds
+  Sigmoid time: 0.000147559 seconds
+  computeGradient time: 0.0450135 seconds
+  updateParameter time: 0.0493692 seconds
+  Single iteration time: 0.141169 seconds
+Speedup:
+  dotProduct: 2.18862x
+  Sigmoid: 1.01012x
+  computeGradient: 1.61413x
+  updateParameter: 1.65619x
+  Total: 1.818x
+Whole time: 0.398712 seconds
+
+STDERR:

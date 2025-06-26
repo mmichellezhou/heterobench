@@ -4,168 +4,150 @@
 #include <algorithm> // For std::max
 
 // Optimized function implementation
+#include <cmath>     // For exp and INFINITY
+#include <algorithm> // For std::max
+
+// The problem statement implies that necessary headers like <cmath> and <algorithm>
+// are already included by the compilation environment or cpu_impl.h.
+// The original code uses `max` and `INFINITY` without explicit includes in the provided snippet,
+// which suggests they are available in the context.
+
 void softmax_optimized(double *softmax_x, double *softmax_output, 
              int batch_size, int input_h, int input_w, int axis) {
-    // Temporary arrays for intermediate results
-    // These allocations are necessary as per the original function's design.
+    // Allocate temporary arrays on the heap, as in the original implementation.
+    // These arrays are necessary to store intermediate results due to the
+    // reduction operations (max and sum) along the innermost dimension.
     double *softmax_m = new double[batch_size * input_h];
-    double *x_minus_m = new double[batch_size * input_h * input_w];
     double *softmax_exp_result = new double[batch_size * input_h * input_w];
     double *softmax_l = new double[batch_size * input_h];
-    
-    // The original Python and C++ implementations of get_max and get_sum
-    // only support axis == -1 and keepdims == true.
-    // The softmax function calls these with axis=-1 and keepdims=true.
-    // Therefore, we only implement the optimized path for this specific case.
-    if (axis == -1) { // keepdims is implicitly true for this path
-        // Define a local constant for loop unrolling.
-        // This helps reduce loop overhead and expose instruction-level parallelism.
-        const int UNROLL_FACTOR = 4; 
 
-        // Fused get_max and x_minus_m calculation:
-        // This combines the first two steps of the original softmax function
-        // (computing the maximum value and then subtracting it from x).
-        // Fusion reduces memory traffic by keeping 'current_max_val' in a register
-        // instead of writing it to 'softmax_m' and then immediately reading it back.
-        for (int i = 0; i < batch_size; ++i) {
-            // Precompute i-offsets for memory access to improve address calculation efficiency (strength reduction).
-            long long i_offset_x = (long long)i * input_h * input_w; // For softmax_x and x_minus_m
-            long long i_offset_m = (long long)i * input_h;           // For softmax_m
+    // Optimization 1: Loop Fusion and Strength Reduction for Array Indexing
+    // Instead of calling separate functions (get_max, get_exp, get_sum) and having
+    // multiple passes over the data, we fuse the operations into fewer, more efficient loops.
+    // This significantly improves data locality by keeping relevant data in cache
+    // and reduces memory traffic. Strength reduction is applied by precomputing
+    // base indices for array access within loops. Using `long long` for indices
+    // to prevent potential integer overflow for very large dimensions.
 
-            for (int j = 0; j < input_h; ++j) {
-                // Phase 1: Compute the maximum value for the current (i, j) slice (along the 'k' dimension).
-                // 'current_max_val' is a register variable, optimizing register reuse.
-                double current_max_val = -INFINITY; // Initialize max for this slice
+    // Pass 1: Calculate max_x for each (i, j) slice.
+    // This replaces the functionality of the `get_max` function.
+    // The maximum value for each (i, j) slice is accumulated in `current_max`.
+    for (int i = 0; i < batch_size; ++i) {
+        // Precompute i-dependent offsets for `softmax_m` and `softmax_x`
+        long long i_offset_m = (long long)i * input_h;
+        long long i_offset_x = (long long)i * input_h * input_w;
 
-                // Precompute j-offset for softmax_x and x_minus_m.
-                long long j_offset_x = (long long)j * input_w; 
-
-                // Use pointer arithmetic for inner loop access, which can help compilers generate more efficient code.
-                double* current_softmax_x_slice = softmax_x + i_offset_x + j_offset_x;
-                
-                // Unrolled loop for max calculation:
-                // Processes multiple elements per iteration to reduce loop overhead and increase ILP.
-                int k = 0;
-                for (; k + UNROLL_FACTOR <= input_w; k += UNROLL_FACTOR) {
-                    current_max_val = std::max(current_max_val, current_softmax_x_slice[k]);
-                    current_max_val = std::max(current_max_val, current_softmax_x_slice[k+1]);
-                    current_max_val = std::max(current_max_val, current_softmax_x_slice[k+2]);
-                    current_max_val = std::max(current_max_val, current_softmax_x_slice[k+3]);
-                }
-                // Handle any remaining elements if input_w is not a multiple of UNROLL_FACTOR.
-                for (; k < input_w; ++k) {
-                    current_max_val = std::max(current_max_val, current_softmax_x_slice[k]);
-                }
-                softmax_m[i_offset_m + j] = current_max_val; // Store the computed max value
-
-                // Phase 2: Compute x_minus_m for the current (i, j) slice.
-                // This uses the 'current_max_val' which is already in a register, avoiding a memory load.
-                double* current_x_minus_m_slice = x_minus_m + i_offset_x + j_offset_x;
-                
-                // Unrolled loop for subtraction:
-                k = 0; // Reset k for the second loop
-                for (; k + UNROLL_FACTOR <= input_w; k += UNROLL_FACTOR) {
-                    current_x_minus_m_slice[k] = current_softmax_x_slice[k] - current_max_val;
-                    current_x_minus_m_slice[k+1] = current_softmax_x_slice[k+1] - current_max_val;
-                    current_x_minus_m_slice[k+2] = current_softmax_x_slice[k+2] - current_max_val;
-                    current_x_minus_m_slice[k+3] = current_softmax_x_slice[k+3] - current_max_val;
-                }
-                // Handle remainder elements.
-                for (; k < input_w; ++k) {
-                    current_x_minus_m_slice[k] = current_softmax_x_slice[k] - current_max_val;
-                }
+        for (int j = 0; j < input_h; ++j) {
+            double current_max = -INFINITY; // Accumulator for max, kept in a CPU register
+            
+            // Precompute j-dependent offset for `softmax_x` within the current (i, j) slice
+            long long current_base_idx_x = i_offset_x + (long long)j * input_w;
+            
+            // Optimization 2: Loop Unrolling for the innermost k loop (by 4)
+            // This exposes more instruction-level parallelism to the CPU and reduces loop overhead.
+            // It allows the CPU to fetch and execute multiple instructions concurrently.
+            int k = 0;
+            for (; k + 3 < input_w; k += 4) {
+                current_max = std::max(current_max, softmax_x[current_base_idx_x + k]);
+                current_max = std::max(current_max, softmax_x[current_base_idx_x + k + 1]);
+                current_max = std::max(current_max, softmax_x[current_base_idx_x + k + 2]);
+                current_max = std::max(current_max, softmax_x[current_base_idx_x + k + 3]);
             }
-        }
-
-        // Optimized get_exp operation:
-        // Computes exp(x_minus_m) and stores the result in softmax_exp_result.
-        for (int i = 0; i < batch_size; ++i) {
-            long long i_offset = (long long)i * input_h * input_w;
-            for (int j = 0; j < input_h; ++j) {
-                long long j_offset = (long long)j * input_w;
-                double* current_x_minus_m_slice = x_minus_m + i_offset + j_offset;
-                double* current_exp_output_slice = softmax_exp_result + i_offset + j_offset;
-
-                int k = 0;
-                for (; k + UNROLL_FACTOR <= input_w; k += UNROLL_FACTOR) {
-                    current_exp_output_slice[k] = exp(current_x_minus_m_slice[k]);
-                    current_exp_output_slice[k+1] = exp(current_x_minus_m_slice[k+1]);
-                    current_exp_output_slice[k+2] = exp(current_x_minus_m_slice[k+2]);
-                    current_exp_output_slice[k+3] = exp(current_x_minus_m_slice[k+3]);
-                }
-                for (; k < input_w; ++k) {
-                    current_exp_output_slice[k] = exp(current_x_minus_m_slice[k]);
-                }
+            // Handle remainder elements if input_w is not a multiple of 4
+            for (; k < input_w; ++k) {
+                current_max = std::max(current_max, softmax_x[current_base_idx_x + k]);
             }
+            softmax_m[i_offset_m + j] = current_max;
         }
-
-        // Optimized get_sum operation:
-        // Computes the sum of exp_result along the last axis and stores it in softmax_l.
-        // Initialize softmax_l (sum array) to zeros. This is a separate pass.
-        for (int i = 0; i < batch_size * input_h; ++i) {
-            softmax_l[i] = 0.0;
-        }
-
-        for (int i = 0; i < batch_size; ++i) {
-            long long i_offset_x = (long long)i * input_h * input_w; // For softmax_exp_result
-            long long i_offset_sum_x = (long long)i * input_h;       // For softmax_l
-
-            for (int j = 0; j < input_h; ++j) {
-                // 'current_sum_val' is a register variable for accumulation.
-                double current_sum_val = 0.0; 
-                long long j_offset_x = (long long)j * input_w; // For softmax_exp_result
-                double* current_exp_result_slice = softmax_exp_result + i_offset_x + j_offset_x;
-
-                // Unrolled loop for sum calculation.
-                int k = 0;
-                for (; k + UNROLL_FACTOR <= input_w; k += UNROLL_FACTOR) {
-                    current_sum_val += current_exp_result_slice[k];
-                    current_sum_val += current_exp_result_slice[k+1];
-                    current_sum_val += current_exp_result_slice[k+2];
-                    current_sum_val += current_exp_result_slice[k+3];
-                }
-                for (; k < input_w; ++k) {
-                    current_sum_val += current_exp_result_slice[k];
-                }
-                softmax_l[i_offset_sum_x + j] = current_sum_val; // Store the computed sum value
-            }
-        }
-
-        // Final division: softmax_output = softmax_exp_result / softmax_l
-        // This is an element-wise division.
-        for (int i = 0; i < batch_size; ++i) {
-            long long i_offset_exp_result = (long long)i * input_h * input_w;
-            long long i_offset_l = (long long)i * input_h;
-
-            for (int j = 0; j < input_h; ++j) {
-                // Load the divisor 'l_val' into a register for reuse across the inner loop.
-                double l_val = softmax_l[i_offset_l + j]; 
-                long long j_offset_exp_result = (long long)j * input_w;
-
-                double* current_exp_result_slice = softmax_exp_result + i_offset_exp_result + j_offset_exp_result;
-                double* current_softmax_output_slice = softmax_output + i_offset_exp_result + j_offset_exp_result;
-
-                int k = 0;
-                for (; k + UNROLL_FACTOR <= input_w; k += UNROLL_FACTOR) {
-                    current_softmax_output_slice[k] = current_exp_result_slice[k] / l_val;
-                    current_softmax_output_slice[k+1] = current_exp_result_slice[k+1] / l_val;
-                    current_softmax_output_slice[k+2] = current_exp_result_slice[k+2] / l_val;
-                    current_softmax_output_slice[k+3] = current_exp_result_slice[k+3] / l_val;
-                }
-                for (; k < input_w; ++k) {
-                    current_softmax_output_slice[k] = current_exp_result_slice[k] / l_val;
-                }
-            }
-        }
-    } else {
-        // This branch corresponds to the "Not implemented yet" case in the original code.
-        // As per the requirements, no output (like cout) should be generated here.
-        // In the context of the original softmax function, this branch is not taken.
     }
 
-    // Deallocate temporary arrays to prevent memory leaks.
+    // Pass 2: Calculate exp(x - m) and sum(exp_result).
+    // This fuses the `x - m` calculation, `get_exp`, and `get_sum` functionalities.
+    // `current_sum_exp` accumulates the sum of exponentials for each (i, j) slice.
+    for (int i = 0; i < batch_size; ++i) {
+        // Precompute i-dependent offsets for `softmax_m`, `softmax_l`, `softmax_x`, and `softmax_exp_result`
+        long long i_offset_m = (long long)i * input_h;
+        long long i_offset_l = (long long)i * input_h;
+        long long i_offset_x = (long long)i * input_h * input_w;
+        long long i_offset_exp_result = (long long)i * input_h * input_w;
+
+        for (int j = 0; j < input_h; ++j) {
+            double current_sum_exp = 0.0; // Accumulator for sum, kept in a CPU register
+            double m_val = softmax_m[i_offset_m + j]; // Load m_val once per (i,j) block, kept in a CPU register
+
+            // Precompute j-dependent offsets for `softmax_x` and `softmax_exp_result`
+            long long current_base_idx_x = i_offset_x + (long long)j * input_w;
+            long long current_base_idx_exp_result = i_offset_exp_result + (long long)j * input_w;
+
+            // Optimization 2: Loop Unrolling for the innermost k loop (by 4)
+            int k = 0;
+            for (; k + 3 < input_w; k += 4) {
+                // Calculate x - m
+                double val0 = softmax_x[current_base_idx_x + k] - m_val;
+                double val1 = softmax_x[current_base_idx_x + k + 1] - m_val;
+                double val2 = softmax_x[current_base_idx_x + k + 2] - m_val;
+                double val3 = softmax_x[current_base_idx_x + k + 3] - m_val;
+
+                // Calculate exp(x - m)
+                // `exp` is a transcendental function, its performance is largely dependent
+                // on the underlying math library implementation.
+                double exp_val0 = exp(val0);
+                double exp_val1 = exp(val1);
+                double exp_val2 = exp(val2);
+                double exp_val3 = exp(val3);
+
+                // Store exp_result for the final division in Pass 3
+                softmax_exp_result[current_base_idx_exp_result + k] = exp_val0;
+                softmax_exp_result[current_base_idx_exp_result + k + 1] = exp_val1;
+                softmax_exp_result[current_base_idx_exp_result + k + 2] = exp_val2;
+                softmax_exp_result[current_base_idx_exp_result + k + 3] = exp_val3;
+
+                // Accumulate sum of exponentials
+                current_sum_exp += exp_val0 + exp_val1 + exp_val2 + exp_val3;
+            }
+            // Handle remainder elements
+            for (; k < input_w; ++k) {
+                double val = softmax_x[current_base_idx_x + k] - m_val;
+                double exp_val = exp(val);
+                softmax_exp_result[current_base_idx_exp_result + k] = exp_val;
+                current_sum_exp += exp_val;
+            }
+            softmax_l[i_offset_l + j] = current_sum_exp;
+        }
+    }
+
+    // Pass 3: Calculate exp_result / l.
+    // This replaces the final division loop in the original `softmax` function.
+    for (int i = 0; i < batch_size; ++i) {
+        // Precompute i-dependent offsets for `softmax_l`, `softmax_exp_result`, and `softmax_output`
+        long long i_offset_l = (long long)i * input_h;
+        long long i_offset_exp_result = (long long)i * input_h * input_w;
+        long long i_offset_output = (long long)i * input_h * input_w;
+
+        for (int j = 0; j < input_h; ++j) {
+            double l_val = softmax_l[i_offset_l + j]; // Load l_val once per (i,j) block, kept in a CPU register
+
+            // Precompute j-dependent offsets for `softmax_exp_result` and `softmax_output`
+            long long current_base_idx_exp_result = i_offset_exp_result + (long long)j * input_w;
+            long long current_base_idx_output = i_offset_output + (long long)j * input_w;
+
+            // Optimization 2: Loop Unrolling for the innermost k loop (by 4)
+            int k = 0;
+            for (; k + 3 < input_w; k += 4) {
+                softmax_output[current_base_idx_output + k] = softmax_exp_result[current_base_idx_exp_result + k] / l_val;
+                softmax_output[current_base_idx_output + k + 1] = softmax_exp_result[current_base_idx_exp_result + k + 1] / l_val;
+                softmax_output[current_base_idx_output + k + 2] = softmax_exp_result[current_base_idx_exp_result + k + 2] / l_val;
+                softmax_output[current_base_idx_output + k + 3] = softmax_exp_result[current_base_idx_exp_result + k + 3] / l_val;
+            }
+            // Handle remainder elements
+            for (; k < input_w; ++k) {
+                softmax_output[current_base_idx_output + k] = softmax_exp_result[current_base_idx_exp_result + k] / l_val;
+            }
+        }
+    }
+
+    // Deallocate temporary memory to prevent memory leaks.
     delete[] softmax_m;
-    delete[] x_minus_m;
     delete[] softmax_exp_result;
     delete[] softmax_l;
 }

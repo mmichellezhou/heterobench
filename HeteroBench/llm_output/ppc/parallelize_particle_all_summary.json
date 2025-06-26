@@ -1,0 +1,8 @@
+{
+  "compute_forces_static": {
+    "function_generation_success": true
+  },
+  "move_particles_static": {
+    "function_generation_success": true
+  }
+}

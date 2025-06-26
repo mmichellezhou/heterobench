@@ -1,0 +1,47 @@
+{
+  "function_name": "hysteresis",
+  "original_file_path": "benchmarks/canny_edge_detection/homobackend_cpu/Cpp/cpu_impl/hysteresis.cpp",
+  "optimized_file_path": "benchmarks/canny_edge_detection/homobackend_cpu/Cpp/cpu_impl_optimized/hysteresis_optimized.cpp",
+  "status": {
+    "function_generation_success": true,
+    "compilation_success": false,
+    "execution_success": false,
+    "verification_success": false
+  },
+  "statistics": {
+    "num_code_blocks_generated": 1,
+    "optimized_code_length": 5015,
+    "prompt_length": 4740,
+    "llm_response_length": 5026
+  },
+  "details": {
+    "entire_llm_response": {
+      "model": "gemini-2.5-flash-preview-05-20",
+      "provider": "google",
+      "temperature": 0.0,
+      "max_tokens": 65536,
+      "response": {
+        "id": "7-RcaO_VCe2o_uMPs-a3uAM",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "```cpp\nvoid hysteresis_optimized(uint8_t *inImage, int height, int width,\n                          uint8_t *outImage) {\n  // Copy input image to output image. This is a large block memory copy,\n  // which is typically highly optimized by the system's memcpy.\n  // The size argument for memcpy should be size_t to handle potentially large images.\n  memcpy(outImage, inImage, (size_t)width * height * sizeof(uint8_t));\n\n  // Loop transformation: Iterate rows in the outer loop and columns in the inner loop.\n  // This ensures contiguous memory accesses within the innermost loop (column iteration),\n  // which significantly improves cache locality and performance on modern CPUs.\n  // The loop bounds respect the OFFSET constant for border handling,\n  // ensuring that neighbor accesses are always within image bounds.\n  for (int row = OFFSET; row < height - OFFSET; ++row) {\n    // Pre-calculate base pointers for the current, previous, and next rows.\n    // Using long long for intermediate multiplication to prevent potential overflow\n    // if width * row exceeds INT_MAX, before being used in pointer arithmetic.\n    uint8_t *p_prev_row = outImage + (long long)(row - 1) * width;\n    uint8_t *p_curr_row = outImage + (long long)row * width;\n    uint8_t *p_next_row = outImage + (long long)(row + 1) * width;\n\n    // Loop unrolling for the inner column loop.\n    // Unrolling by 4 to expose more instruction-level parallelism (ILP) and\n    // allow for better register reuse of neighbor values across iterations.\n    // This also reduces loop overhead (branching, loop counter increments).\n    int col = OFFSET;\n    for (; col < width - OFFSET - 3; col += 4) {\n      // Prefetch data for future iterations to reduce cache misses.\n      // __builtin_prefetch is a GCC/Clang intrinsic that hints to the CPU's prefetcher.\n      // It requests to prefetch the next block of 4 columns for the previous, current, and next rows.\n      // '0' indicates a read operation, '1' indicates low temporal locality (data will be used soon but not repeatedly).\n      __builtin_prefetch(p_prev_row + col + 4, 0, 1);\n      __builtin_prefetch(p_curr_row + col + 4, 0, 1);\n      __builtin_prefetch(p_next_row + col + 4, 0, 1);\n\n      // Process pixel at col\n      uint8_t val_curr0 = p_curr_row[col];\n      if (val_curr0 == 100) {\n        // Check 8 neighbors for the value 255.\n        // The compiler will optimize the boolean OR operations, potentially short-circuiting.\n        bool neighbor_255_0 = (p_prev_row[col - 1] == 255 || p_prev_row[col] == 255 || p_prev_row[col + 1] == 255 ||\n                               p_curr_row[col - 1] == 255 || p_curr_row[col + 1] == 255 ||\n                               p_next_row[col - 1] == 255 || p_next_row[col] == 255 || p_next_row[col + 1] == 255);\n        p_curr_row[col] = neighbor_255_0 ? 255 : 0;\n      }\n\n      // Process pixel at col + 1\n      uint8_t val_curr1 = p_curr_row[col + 1];\n      if (val_curr1 == 100) {\n        bool neighbor_255_1 = (p_prev_row[col] == 255 || p_prev_row[col + 1] == 255 || p_prev_row[col + 2] == 255 ||\n                               p_curr_row[col] == 255 || p_curr_row[col + 2] == 255 ||\n                               p_next_row[col] == 255 || p_next_row[col + 1] == 255 || p_next_row[col + 2] == 255);\n        p_curr_row[col + 1] = neighbor_255_1 ? 255 : 0;\n      }\n\n      // Process pixel at col + 2\n      uint8_t val_curr2 = p_curr_row[col + 2];\n      if (val_curr2 == 100) {\n        bool neighbor_255_2 = (p_prev_row[col + 1] == 255 || p_prev_row[col + 2] == 255 || p_prev_row[col + 3] == 255 ||\n                               p_curr_row[col + 1] == 255 || p_curr_row[col + 3] == 255 ||\n                               p_next_row[col + 1] == 255 || p_next_row[col + 2] == 255 || p_next_row[col + 3] == 255);\n        p_curr_row[col + 2] = neighbor_255_2 ? 255 : 0;\n      }\n\n      // Process pixel at col + 3\n      uint8_t val_curr3 = p_curr_row[col + 3];\n      if (val_curr3 == 100) {\n        bool neighbor_255_3 = (p_prev_row[col + 2] == 255 || p_prev_row[col + 3] == 255 || p_prev_row[col + 4] == 255 ||\n                               p_curr_row[col + 2] == 255 || p_curr_row[col + 4] == 255 ||\n                               p_next_row[col + 2] == 255 || p_next_row[col + 3] == 255 || p_next_row[col + 4] == 255);\n        p_curr_row[col + 3] = neighbor_255_3 ? 255 : 0;\n      }\n    }\n\n    // Remainder loop for columns that couldn't be processed in blocks of 4.\n    // This ensures correct processing for image widths not perfectly divisible by 4.\n    for (; col < width - OFFSET; ++col) {\n      uint8_t val_curr = p_curr_row[col];\n      if (val_curr == 100) {\n        bool neighbor_255 = (p_prev_row[col - 1] == 255 || p_prev_row[col] == 255 || p_prev_row[col + 1] == 255 ||\n                             p_curr_row[col - 1] == 255 || p_curr_row[col + 1] == 255 ||\n                             p_next_row[col - 1] == 255 || p_next_row[col] == 255 || p_next_row[col + 1] == 255);\n        p_curr_row[col] = neighbor_255 ? 255 : 0;\n      }\n    }\n  }\n}\n```",
+              "function_call": null,
+              "tool_calls": null
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "created": 1750918383,
+        "model": "gemini-2.5-flash-preview-05-20",
+        "usage": {
+          "prompt_tokens": 1317,
+          "completion_tokens": 1793,
+          "total_tokens": 14796
+        }
+      }
+    }
+  }
+}

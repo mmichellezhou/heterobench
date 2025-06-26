@@ -7,87 +7,77 @@
 #include <algorithm> // Required for std::min
 
 void dot_add_optimized(double *dot_add_input_x, double *dot_add_input_W, double *dot_add_input_b, double *dot_add_output, int x_h, int x_w, int W_h, int W_w) {
-  // Define local constants for tiling and unrolling factors.
-  // These values are chosen as common heuristics for double-precision floating-point operations
-  // on modern CPUs, balancing cache locality, instruction-level parallelism, and register pressure.
-  // TILE_J: A tile size for the 'j' dimension (columns of W and output).
-  //         A value of 64 doubles (512 bytes) is small enough to fit comfortably in L1 cache.
-  const int TILE_J = 64;
-  // UNROLL_J: Unroll factor for the innermost 'j' loop.
-  //           Unrolling by 4 exposes more independent operations for the CPU's execution units,
-  //           reducing loop overhead and improving instruction-level parallelism (ILP).
-  const int UNROLL_J = 4;
+  // Define tile sizes locally. These are chosen to fit within L1/L2 cache for typical matrix sizes.
+  // For Intel Xeon Gold 6248R, L1d is 1.5MB, L2 is 48MB.
+  // A tile of 64x64x64 doubles is 3 * 64*64 * 8 bytes = 96KB, which fits well in L1d.
+  const int TILE_I = 64; // Rows of X / Output
+  const int TILE_J = 64; // Columns of W / Output
+  const int TILE_K = 64; // Inner dimension (x_w / W_h)
 
-  // Phase 1: Initialize the output matrix with the bias values.
-  // This combines the initialization step and the bias addition, eliminating a separate loop nest later.
-  // The matrix multiplication will then accumulate its results on top of these initial bias values.
-  for (int i = 0; i < x_h; i++) {
-    // Use pointer arithmetic for strength reduction, avoiding repeated multiplications.
-    double* current_output_row_ptr = dot_add_output + i * W_w;
-    // Unroll the inner loop for better performance during initialization.
-    for (int j = 0; j < W_w; j += UNROLL_J) {
-      // Handle tail cases where W_w is not a multiple of UNROLL_J.
-      if (j + 0 < W_w) {
-        current_output_row_ptr[j + 0] = dot_add_input_b[j + 0];
-      }
-      if (j + 1 < W_w) {
-        current_output_row_ptr[j + 1] = dot_add_input_b[j + 1];
-      }
-      if (j + 2 < W_w) {
-        current_output_row_ptr[j + 2] = dot_add_input_b[j + 2];
-      }
-      if (j + 3 < W_w) {
-        current_output_row_ptr[j + 3] = dot_add_input_b[j + 3];
+  // Loop Fusion: Initialize dot_add_output with bias (b)
+  // This combines the bias addition step with the initialization of the output matrix,
+  // reducing memory writes and improving cache locality for dot_add_output.
+  for (int ii = 0; ii < x_h; ii += TILE_I) {
+    for (int jj = 0; jj < W_w; jj += TILE_J) {
+      // Iterate over the current tile block for rows (i)
+      for (int i = ii; i < (ii + TILE_I < x_h ? ii + TILE_I : x_h); i++) {
+        double* current_output_row_ptr = dot_add_output + i * W_w;
+        int j_limit = (jj + TILE_J < W_w ? jj + TILE_J : W_w);
+        // Calculate the limit for the unrolled loop part (unroll factor of 4)
+        int j_unrolled_limit = j_limit - (j_limit - jj) % 4;
+
+        // Unroll the innermost loop for better instruction-level parallelism and reduced loop overhead
+        for (int j = jj; j < j_unrolled_limit; j += 4) {
+          current_output_row_ptr[j]     = dot_add_input_b[j];
+          current_output_row_ptr[j + 1] = dot_add_input_b[j + 1];
+          current_output_row_ptr[j + 2] = dot_add_input_b[j + 2];
+          current_output_row_ptr[j + 3] = dot_add_input_b[j + 3];
+        }
+        // Handle remaining elements if the loop count is not a multiple of 4
+        for (int j = j_unrolled_limit; j < j_limit; j++) {
+          current_output_row_ptr[j] = dot_add_input_b[j];
+        }
       }
     }
   }
 
-  // Phase 2: Perform the matrix multiplication (X * W) and accumulate results onto the bias-initialized output.
-  // The original loop order was ijk. This is transformed to ikj for improved cache performance.
-  // In the ikj order:
-  // - Accesses to dot_add_input_x[i * x_w + k] are sequential for 'k' within an 'i' row.
-  // - Accesses to dot_add_input_W[k * W_w + j] are sequential for 'j' within a 'k' row.
-  // - Accesses to dot_add_output[i * W_w + j] are sequential for 'j' within an 'i' row.
-  // This ensures stride-1 memory access patterns for the most frequently accessed data in the innermost loop,
-  // maximizing cache line utilization and reducing cache misses.
-  for (int i = 0; i < x_h; i++) {
-    // Pointer to the current row of X (dot_add_input_x[i][:])
-    double* current_x_row_ptr = dot_add_input_x + i * x_w;
-    // Pointer to the current row of Output (dot_add_output[i][:])
-    double* current_output_row_ptr = dot_add_output + i * W_w;
+  // Matrix Multiplication (X * W) with optimized loop order and tiling
+  // The loop order is transformed from ijk to ikj to improve memory access patterns.
+  // Specifically, dot_add_input_W (matrix W) is accessed row-wise (stride 1) in the innermost loop,
+  // which is highly cache-friendly.
+  // Results are accumulated directly into dot_add_output, which was initialized with bias.
+  for (int ii = 0; ii < x_h; ii += TILE_I) { // Outer loop for row blocks of X/Output
+    for (int kk = 0; kk < x_w; kk += TILE_K) { // Middle loop for inner dimension blocks (k)
+      for (int jj = 0; jj < W_w; jj += TILE_J) { // Inner loop for column blocks of W/Output
+        // Iterate over the current tile block for rows (i)
+        for (int i = ii; i < (ii + TILE_I < x_h ? ii + TILE_I : x_h); i++) {
+          // Use pointer arithmetic to pre-calculate row starting addresses, reducing multiplications inside loops
+          double* current_x_row_ptr = dot_add_input_x + i * x_w;
+          double* current_output_row_ptr = dot_add_output + i * W_w;
 
-    for (int k = 0; k < x_w; k++) {
-      // Load x_val once per (i, k) pair. This value is then reused W_w times in the inner 'j' loop,
-      // promoting register reuse and reducing memory loads.
-      double x_val = current_x_row_ptr[k];
-      // Pointer to the current row of W (dot_add_input_W[k][:])
-      double* current_W_row_ptr = dot_add_input_W + k * W_w;
+          // Iterate over the current tile block for inner dimension (k)
+          for (int k = kk; k < (kk + TILE_K < x_w ? kk + TILE_K : x_w); k++) {
+            // Load x[i][k] once per k-loop and keep it in a register (val_x_ik) for reuse
+            double val_x_ik = current_x_row_ptr[k];
 
-      // Tiled loop for 'j' dimension.
-      // This helps keep a smaller, more cache-friendly block of 'W' and 'Output' data in L1/L2 cache,
-      // especially when W_w is very large.
-      for (int jj = 0; jj < W_w; jj += TILE_J) {
-        // Calculate the actual end index for the current 'j' tile, handling boundary conditions.
-        int j_end_tile = std::min(jj + TILE_J, W_w);
+            // Use pointer arithmetic for W's row starting address
+            double* current_W_row_ptr = dot_add_input_W + k * W_w;
 
-        // Unrolled loop for 'j' dimension.
-        // This reduces loop control overhead (branching, incrementing 'j') and exposes more
-        // independent multiply-add operations to the CPU's execution units, improving ILP.
-        for (int j = jj; j < j_end_tile; j += UNROLL_J) {
-          // Perform UNROLL_J multiply-add operations.
-          // Each operation is independent, allowing the CPU to pipeline them effectively.
-          // Explicitly check bounds for tail cases within the unrolled block to ensure correctness.
-          if (j + 0 < j_end_tile) {
-            current_output_row_ptr[j + 0] += x_val * current_W_row_ptr[j + 0];
-          }
-          if (j + 1 < j_end_tile) {
-            current_output_row_ptr[j + 1] += x_val * current_W_row_ptr[j + 1];
-          }
-          if (j + 2 < j_end_tile) {
-            current_output_row_ptr[j + 2] += x_val * current_W_row_ptr[j + 2];
-          }
-          if (j + 3 < j_end_tile) {
-            current_output_row_ptr[j + 3] += x_val * current_W_row_ptr[j + 3];
+            int j_limit = (jj + TILE_J < W_w ? jj + TILE_J : W_w);
+            // Calculate the limit for the unrolled loop part (unroll factor of 4)
+            int j_unrolled_limit = j_limit - (j_limit - jj) % 4;
+
+            // Unroll the innermost loop (j) for better instruction-level parallelism and reduced loop overhead
+            for (int j = jj; j < j_unrolled_limit; j += 4) {
+              current_output_row_ptr[j]     += val_x_ik * current_W_row_ptr[j];
+              current_output_row_ptr[j + 1] += val_x_ik * current_W_row_ptr[j + 1];
+              current_output_row_ptr[j + 2] += val_x_ik * current_W_row_ptr[j + 2];
+              current_output_row_ptr[j + 3] += val_x_ik * current_W_row_ptr[j + 3];
+            }
+            // Handle remaining elements if the loop count is not a multiple of 4
+            for (int j = j_unrolled_limit; j < j_limit; j++) {
+              current_output_row_ptr[j] += val_x_ik * current_W_row_ptr[j];
+            }
           }
         }
       }

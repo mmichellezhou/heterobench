@@ -1,0 +1,47 @@
+{
+  "function_name": "max_pooling",
+  "original_file_path": "benchmarks/convolutional_neural_network/homobackend_cpu/Cpp/cpu_impl/max_pooling.cpp",
+  "optimized_file_path": "benchmarks/convolutional_neural_network/homobackend_cpu/Cpp/cpu_impl_optimized/max_pooling_optimized.cpp",
+  "status": {
+    "function_generation_success": true,
+    "compilation_success": false,
+    "execution_success": false,
+    "verification_success": false
+  },
+  "statistics": {
+    "num_code_blocks_generated": 1,
+    "optimized_code_length": 3918,
+    "prompt_length": 5355,
+    "llm_response_length": 3929
+  },
+  "details": {
+    "entire_llm_response": {
+      "model": "gemini-2.5-flash-preview-05-20",
+      "provider": "google",
+      "temperature": 0.0,
+      "max_tokens": 65536,
+      "response": {
+        "id": "fuVcaJfgI8qTjMcPjeS02QU",
+        "choices": [
+          {
+            "index": 0,
+            "message": {
+              "role": "assistant",
+              "content": "```cpp\nvoid max_pooling_optimized(double *max_pooling_input, int pool_size, int pool_stride, int input_h, int input_w, double *max_pooling_output) {\n  int output_h = (input_h - pool_size) / pool_stride + 1;\n  int output_w = (input_w - pool_size) / pool_stride + 1;\n\n  // Unroll factor for the innermost loop.\n  // A factor of 4 is chosen to expose instruction-level parallelism for double operations\n  // and to utilize cache lines effectively (a cache line is typically 64 bytes,\n  // which holds 8 doubles. Unrolling by 4 processes half a cache line at a time,\n  // allowing for prefetching and parallel loads).\n  const int UNROLL_L = 4; \n\n  for (int i = 0; i < output_h; i++) {\n    // Strength Reduction: Calculate the base offset for the current input row block once per outer loop iteration.\n    // Using long long for offset calculation to prevent potential overflow\n    // if input_h, pool_stride, or input_w are very large, ensuring correct pointer arithmetic.\n    long long input_row_base_offset = (long long)i * pool_stride * input_w;\n    \n    // Register Optimization: Pre-calculate the pointer to the start of the current output row.\n    // This keeps the output pointer in a register and avoids repeated calculations.\n    double *current_output_row_ptr = max_pooling_output + i * output_w;\n\n    for (int j = 0; j < output_w; j++) {\n      // Strength Reduction: Calculate the base column offset for the current input column block once per iteration.\n      int input_col_base_offset = j * pool_stride;\n\n      double max_val;\n\n      // Functional Equivalence & Correctness: Initialize max_val with the first element of the current pooling region.\n      // This correctly handles negative input values, unlike initializing with 0, matching numpy's behavior.\n      max_val = max_pooling_input[input_row_base_offset + input_col_base_offset];\n\n      // Loop over rows within the pooling window.\n      for (int k = 0; k < pool_size; k++) {\n        // Strength Reduction & Register Optimization: Pre-calculate the pointer to the start of the current row\n        // within the input window. This avoids repeated multiplication inside the inner loop and keeps the pointer in a register.\n        double *current_input_row_ptr = max_pooling_input + input_row_base_offset + (long long)k * input_w;\n\n        // Loop Transformation: Determine the starting column index for the inner loop.\n        // If it's the first row (k=0), we start from column 1 because column 0 (l=0)\n        // was already used to initialize max_val. Otherwise, start from column 0.\n        int l_start = (k == 0) ? 1 : 0;\n\n        // Loop Unrolling & Instruction-Level Parallelism: Loop over columns within the pooling window with unrolling.\n        // This reduces loop overhead and exposes multiple independent `std::max` operations,\n        // allowing the CPU to execute them in parallel if resources are available.\n        for (int l = l_start; l < pool_size; l += UNROLL_L) {\n          // Process UNROLL_L columns.\n          // Each std::max operation is independent, allowing the CPU to execute them\n          // in parallel (Instruction-Level Parallelism) if resources are available.\n          \n          // Element 0\n          max_val = std::max(max_val, current_input_row_ptr[input_col_base_offset + l]);\n\n          // Element 1\n          if (l + 1 < pool_size) {\n            max_val = std::max(max_val, current_input_row_ptr[input_col_base_offset + l + 1]);\n          }\n          // Element 2\n          if (l + 2 < pool_size) {\n            max_val = std::max(max_val, current_input_row_ptr[input_col_base_offset + l + 2]);\n          }\n          // Element 3\n          if (l + 3 < pool_size) {\n            max_val = std::max(max_val, current_input_row_ptr[input_col_base_offset + l + 3]);\n          }\n        }\n      }\n      // Store the maximum value found for the current output pixel.\n      current_output_row_ptr[j] = max_val;\n    }\n  }\n}\n```",
+              "function_call": null,
+              "tool_calls": null
+            },
+            "finish_reason": "stop"
+          }
+        ],
+        "created": 1750918526,
+        "model": "gemini-2.5-flash-preview-05-20",
+        "usage": {
+          "prompt_tokens": 1587,
+          "completion_tokens": 1082,
+          "total_tokens": 12821
+        }
+      }
+    }
+  }
+}

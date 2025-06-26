@@ -2,90 +2,86 @@
 
 void softmax_optimized(double *softmax_input, double *exp_results, double *softmax_output, int size)
 {
-  // Accumulators for sum_total_0 to enable instruction-level parallelism
-  // by breaking the data dependency chain for the sum.
-  double sum_total_0_part0 = 0.0;
-  double sum_total_0_part1 = 0.0;
-  double sum_total_0_part2 = 0.0;
-  double sum_total_0_part3 = 0.0;
-  double sum_total_0_part4 = 0.0;
-  double sum_total_0_part5 = 0.0;
-  double sum_total_0_part6 = 0.0;
-  double sum_total_0_part7 = 0.0;
+  // Initialize main sum accumulator
+  double sum_total_0 = 0.0;
+
+  // Define unroll factor for loop transformations.
+  // This constant is defined within the function scope as required.
+  const int UNROLL_FACTOR = 4;
+
+  // Initialize multiple accumulators for the sum to improve Instruction-Level Parallelism (ILP).
+  // This helps reduce the dependency chain length for the sum operation.
+  double sum_acc0 = 0.0;
+  double sum_acc1 = 0.0;
+  double sum_acc2 = 0.0;
+  double sum_acc3 = 0.0;
 
   int i = 0;
-  // Calculate limit for the main unrolled loop.
-  // Using an unroll factor of 8 to reduce loop overhead and expose Instruction-Level Parallelism (ILP)
-  // for the expensive `exp` function calls and subsequent additions.
-  int limit = size - (size % 8);
 
-  // First loop: calculate exp(softmax_input[i]) and accumulate sum_total_0.
-  // Loop unrolling and register optimization are applied here.
-  for (; i < limit; i += 8) {
-    // Compute exp for 8 elements. These operations can potentially execute in parallel
-    // on modern CPUs due to multiple floating-point execution units.
-    double val0 = exp(softmax_input[i]);
-    double val1 = exp(softmax_input[i+1]);
-    double val2 = exp(softmax_input[i+2]);
-    double val3 = exp(softmax_input[i+3]);
-    double val4 = exp(softmax_input[i+4]);
-    double val5 = exp(softmax_input[i+5]);
-    double val6 = exp(softmax_input[i+6]);
-    double val7 = exp(softmax_input[i+7]);
+  // First loop: Compute exp(input) and accumulate sum_total_0.
+  // Loop unrolling is applied to expose more independent operations for ILP.
+  for (; i + UNROLL_FACTOR <= size; i += UNROLL_FACTOR) {
+    // Load input values
+    double val0 = softmax_input[i];
+    double val1 = softmax_input[i+1];
+    double val2 = softmax_input[i+2];
+    double val3 = softmax_input[i+3];
 
-    // Store results into exp_results array.
-    exp_results[i] = val0;
-    exp_results[i+1] = val1;
-    exp_results[i+2] = val2;
-    exp_results[i+3] = val3;
-    exp_results[i+4] = val4;
-    exp_results[i+5] = val5;
-    exp_results[i+6] = val6;
-    exp_results[i+7] = val7;
+    // Compute exponential for each value. These operations can potentially
+    // execute in parallel on modern CPUs.
+    double exp_val0 = exp(val0);
+    double exp_val1 = exp(val1);
+    double exp_val2 = exp(val2);
+    double exp_val3 = exp(val3);
 
-    // Accumulate sums into separate registers. This allows the additions to proceed
-    // in parallel, reducing the critical path latency of the sum reduction.
-    sum_total_0_part0 += val0;
-    sum_total_0_part1 += val1;
-    sum_total_0_part2 += val2;
-    sum_total_0_part3 += val3;
-    sum_total_0_part4 += val4;
-    sum_total_0_part5 += val5;
-    sum_total_0_part6 += val6;
-    sum_total_0_part7 += val7;
+    // Store the exponential results in the intermediate array.
+    exp_results[i] = exp_val0;
+    exp_results[i+1] = exp_val1;
+    exp_results[i+2] = exp_val2;
+    exp_results[i+3] = exp_val3;
+
+    // Accumulate partial sums using separate accumulators.
+    sum_acc0 += exp_val0;
+    sum_acc1 += exp_val1;
+    sum_acc2 += exp_val2;
+    sum_acc3 += exp_val3;
   }
 
-  // Combine the partial sums from the unrolled loop.
-  double sum_total_0 = sum_total_0_part0 + sum_total_0_part1 + sum_total_0_part2 + sum_total_0_part3 +
-                       sum_total_0_part4 + sum_total_0_part5 + sum_total_0_part6 + sum_total_0_part7;
+  // Combine the partial sums from the multiple accumulators.
+  sum_total_0 = sum_acc0 + sum_acc1 + sum_acc2 + sum_acc3;
 
-  // Handle any remaining elements that did not fit into the unrolled loop (remainder loop).
-  for (; i < size; i++) {
+  // Handle remaining elements if 'size' is not a multiple of UNROLL_FACTOR.
+  for (; i < size; ++i) {
     exp_results[i] = exp(softmax_input[i]);
     sum_total_0 += exp_results[i];
   }
 
-  // Second loop: calculate softmax_output.
-  // Apply strength reduction: replace division by a multiplication with the reciprocal.
-  // This moves the expensive division operation outside the loop.
+  // Strength Reduction: Replace division inside the loop with multiplication.
+  // Calculate the inverse of sum_total_0 once outside the loop.
+  // For softmax, exp(x) is always positive, so sum_total_0 will be positive for size > 0.
   double inv_sum_total_0 = 1.0 / sum_total_0;
 
-  // Reset loop index for the second loop.
+  // Reset loop counter for the second loop.
   i = 0;
-  // Apply loop unrolling by 8 for the division part as well, similar to the first loop.
-  for (; i < limit; i += 8) {
-    softmax_output[i] = exp_results[i] * inv_sum_total_0;
-    softmax_output[i+1] = exp_results[i+1] * inv_sum_total_0;
-    softmax_output[i+2] = exp_results[i+2] * inv_sum_total_0;
-    softmax_output[i+3] = exp_results[i+3] * inv_sum_total_0;
-    softmax_output[i+4] = exp_results[i+4] * inv_sum_total_0;
-    softmax_output[i+5] = exp_results[i+5] * inv_sum_total_0;
-    softmax_output[i+6] = exp_results[i+6] * inv_sum_total_0;
-    softmax_output[i+7] = exp_results[i+7] * inv_sum_total_0;
+
+  // Second loop: Compute the final softmax output.
+  // Loop unrolling is applied again, and the division is replaced by multiplication.
+  for (; i + UNROLL_FACTOR <= size; i += UNROLL_FACTOR) {
+    // Load pre-computed exponential results.
+    double exp_res0 = exp_results[i];
+    double exp_res1 = exp_results[i+1];
+    double exp_res2 = exp_results[i+2];
+    double exp_res3 = exp_results[i+3];
+
+    // Compute the final output using multiplication, which is generally faster than division.
+    softmax_output[i] = exp_res0 * inv_sum_total_0;
+    softmax_output[i+1] = exp_res1 * inv_sum_total_0;
+    softmax_output[i+2] = exp_res2 * inv_sum_total_0;
+    softmax_output[i+3] = exp_res3 * inv_sum_total_0;
   }
 
-  // Handle any remaining elements for the second loop.
-  for (; i < size; i++) {
+  // Handle remaining elements for the second loop.
+  for (; i < size; ++i) {
     softmax_output[i] = exp_results[i] * inv_sum_total_0;
   }
 }

@@ -1,0 +1,11 @@
+{
+  "knn_vote": {
+    "function_generation_success": true
+  },
+  "popcount": {
+    "function_generation_success": true
+  },
+  "update_knn": {
+    "function_generation_success": true
+  }
+}

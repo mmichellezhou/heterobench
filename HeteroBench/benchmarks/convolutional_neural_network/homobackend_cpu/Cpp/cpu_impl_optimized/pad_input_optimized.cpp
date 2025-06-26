@@ -1,130 +1,148 @@
 #include "cpu_impl.h"
 
 void pad_input_optimized(double *pad_input_input, double *pad_input_output, int input_h, int input_w, int padding) {
-  // Handle the special case where no padding is required.
-  // This involves a direct copy from input to output.
+  // Define unroll factor as a constant within the function scope
+  // This helps expose instruction-level parallelism and reduces loop overhead.
+  // For doubles (8 bytes), an unroll factor of 8 processes 64 bytes, aligning with common cache line sizes.
+  const int UNROLL_FACTOR = 8;
+
   if (padding == 0) {
-    double* current_input_row_ptr = pad_input_input;
-    double* current_output_row_ptr = pad_input_output;
-
-    // Define an unroll factor for scalar operations.
-    // Unrolling helps reduce loop overhead and expose instruction-level parallelism.
-    const int UNROLL_FACTOR = 4; 
-
+    // If no padding, simply copy the input to the output.
+    // Optimized with pointer arithmetic and loop unrolling for better performance.
     for (int i = 0; i < input_h; i++) {
-      int j = 0;
-      // Process elements in chunks using unrolling
-      for (; j + UNROLL_FACTOR <= input_w; j += UNROLL_FACTOR) {
-        current_output_row_ptr[j] = current_input_row_ptr[j];
-        current_output_row_ptr[j+1] = current_input_row_ptr[j+1];
-        current_output_row_ptr[j+2] = current_input_row_ptr[j+2];
-        current_output_row_ptr[j+3] = current_input_row_ptr[j+3];
+      // Use long long for offset calculation to prevent potential overflow for very large dimensions.
+      double *current_output_ptr = pad_input_output + (long long)i * input_w;
+      double *current_input_ptr = pad_input_input + (long long)i * input_w;
+
+      // Unrolled loop for the main part of the row
+      for (int j = 0; j < input_w / UNROLL_FACTOR; ++j) {
+        current_output_ptr[j * UNROLL_FACTOR + 0] = current_input_ptr[j * UNROLL_FACTOR + 0];
+        current_output_ptr[j * UNROLL_FACTOR + 1] = current_input_ptr[j * UNROLL_FACTOR + 1];
+        current_output_ptr[j * UNROLL_FACTOR + 2] = current_input_ptr[j * UNROLL_FACTOR + 2];
+        current_output_ptr[j * UNROLL_FACTOR + 3] = current_input_ptr[j * UNROLL_FACTOR + 3];
+        current_output_ptr[j * UNROLL_FACTOR + 4] = current_input_ptr[j * UNROLL_FACTOR + 4];
+        current_output_ptr[j * UNROLL_FACTOR + 5] = current_input_ptr[j * UNROLL_FACTOR + 5];
+        current_output_ptr[j * UNROLL_FACTOR + 6] = current_input_ptr[j * UNROLL_FACTOR + 6];
+        current_output_ptr[j * UNROLL_FACTOR + 7] = current_input_ptr[j * UNROLL_FACTOR + 7];
       }
-      // Handle remaining elements (if input_w is not a multiple of UNROLL_FACTOR)
-      for (; j < input_w; j++) {
-        current_output_row_ptr[j] = current_input_row_ptr[j];
+      // Handle any remaining elements that don't fit into the unrolled loop
+      for (int j = (input_w / UNROLL_FACTOR) * UNROLL_FACTOR; j < input_w; ++j) {
+        current_output_ptr[j] = current_input_ptr[j];
       }
-      // Move pointers to the next row
-      current_input_row_ptr += input_w;
-      current_output_row_ptr += input_w; // For padding == 0, output width is same as input width
     }
     return;
   }
 
-  // Calculate the width of the padded output array.
-  // This is a loop-invariant calculation moved outside the loops (loop-invariant code motion).
-  int output_w = input_w + 2 * padding;
+  // Calculate the width of the padded output array once (strength reduction)
+  const int padded_w = input_w + 2 * padding;
 
-  // Define an unroll factor for scalar operations.
-  const int UNROLL_FACTOR = 4;
+  // Use pointers to traverse rows, avoiding repeated multiplication for row offsets.
+  double *current_output_row_ptr = pad_input_output;
+  double *current_input_row_ptr = pad_input_input;
 
-  // Optimization Strategy for padding > 0:
-  // Instead of zeroing the entire output array and then copying the input,
-  // we perform a single pass that zeroes the padding regions and copies the input data,
-  // avoiding redundant writes to memory. This improves cache efficiency and reduces memory traffic.
-
-  // 1. Zero the top 'padding' rows of the output array.
-  double* current_output_row_ptr = pad_input_output;
+  // 1. Zero the top 'padding' rows
+  // This loop initializes the top padding region of the output array to 0.0.
   for (int i = 0; i < padding; ++i) {
-    int j = 0;
-    // Unrolled loop for zeroing
-    for (; j + UNROLL_FACTOR <= output_w; j += UNROLL_FACTOR) {
-      current_output_row_ptr[j] = 0.0;
-      current_output_row_ptr[j+1] = 0.0;
-      current_output_row_ptr[j+2] = 0.0;
-      current_output_row_ptr[j+3] = 0.0;
+    // Unrolled loop for zeroing elements in the current row
+    for (int j = 0; j < padded_w / UNROLL_FACTOR; ++j) {
+      current_output_row_ptr[j * UNROLL_FACTOR + 0] = 0.0;
+      current_output_row_ptr[j * UNROLL_FACTOR + 1] = 0.0;
+      current_output_row_ptr[j * UNROLL_FACTOR + 2] = 0.0;
+      current_output_row_ptr[j * UNROLL_FACTOR + 3] = 0.0;
+      current_output_row_ptr[j * UNROLL_FACTOR + 4] = 0.0;
+      current_output_row_ptr[j * UNROLL_FACTOR + 5] = 0.0;
+      current_output_row_ptr[j * UNROLL_FACTOR + 6] = 0.0;
+      current_output_row_ptr[j * UNROLL_FACTOR + 7] = 0.0;
     }
-    // Handle remainder
-    for (; j < output_w; ++j) {
+    // Handle any remaining elements
+    for (int j = (padded_w / UNROLL_FACTOR) * UNROLL_FACTOR; j < padded_w; ++j) {
       current_output_row_ptr[j] = 0.0;
     }
-    current_output_row_ptr += output_w; // Move to the next output row
+    // Advance the output pointer to the next row
+    current_output_row_ptr += padded_w;
   }
 
-  // 2. Process the 'input_h' rows where the actual input data resides.
-  // For each such row, zero the left padding, copy the input data, and zero the right padding.
-  double* current_input_row_ptr = pad_input_input;
+  // 2. Process the 'input_h' middle rows (where the original input data goes)
+  // This section combines zeroing of left/right padding and copying of input data
+  // into a single loop structure, reducing redundant memory writes (dead store elimination).
   for (int i = 0; i < input_h; ++i) {
-    // Zero the 'padding' elements on the left side of the current output row.
-    int j = 0;
-    for (; j + UNROLL_FACTOR <= padding; j += UNROLL_FACTOR) {
-      current_output_row_ptr[j] = 0.0;
-      current_output_row_ptr[j+1] = 0.0;
-      current_output_row_ptr[j+2] = 0.0;
-      current_output_row_ptr[j+3] = 0.0;
+    // Zero the left padding for the current row
+    for (int j = 0; j < padding / UNROLL_FACTOR; ++j) {
+      current_output_row_ptr[j * UNROLL_FACTOR + 0] = 0.0;
+      current_output_row_ptr[j * UNROLL_FACTOR + 1] = 0.0;
+      current_output_row_ptr[j * UNROLL_FACTOR + 2] = 0.0;
+      current_output_row_ptr[j * UNROLL_FACTOR + 3] = 0.0;
+      current_output_row_ptr[j * UNROLL_FACTOR + 4] = 0.0;
+      current_output_row_ptr[j * UNROLL_FACTOR + 5] = 0.0;
+      current_output_row_ptr[j * UNROLL_FACTOR + 6] = 0.0;
+      current_output_row_ptr[j * UNROLL_FACTOR + 7] = 0.0;
     }
-    for (; j < padding; ++j) {
+    // Handle remainder for left padding
+    for (int j = (padding / UNROLL_FACTOR) * UNROLL_FACTOR; j < padding; ++j) {
       current_output_row_ptr[j] = 0.0;
     }
 
-    // Copy 'input_w' elements from the current input row to the padded output row.
+    // Copy the input data for the current row into the padded output
     // The destination starts after the left padding.
-    j = 0; // Reset inner loop counter
-    double* dest_ptr_for_copy = current_output_row_ptr + padding;
-    for (; j + UNROLL_FACTOR <= input_w; j += UNROLL_FACTOR) {
-      dest_ptr_for_copy[j] = current_input_row_ptr[j];
-      dest_ptr_for_copy[j+1] = current_input_row_ptr[j+1];
-      dest_ptr_for_copy[j+2] = current_input_row_ptr[j+2];
-      dest_ptr_for_copy[j+3] = current_input_row_ptr[j+3];
+    double *output_data_start_ptr = current_output_row_ptr + padding;
+    for (int j = 0; j < input_w / UNROLL_FACTOR; ++j) {
+      output_data_start_ptr[j * UNROLL_FACTOR + 0] = current_input_row_ptr[j * UNROLL_FACTOR + 0];
+      output_data_start_ptr[j * UNROLL_FACTOR + 1] = current_input_row_ptr[j * UNROLL_FACTOR + 1];
+      output_data_start_ptr[j * UNROLL_FACTOR + 2] = current_input_row_ptr[j * UNROLL_FACTOR + 2];
+      output_data_start_ptr[j * UNROLL_FACTOR + 3] = current_input_row_ptr[j * UNROLL_FACTOR + 3];
+      output_data_start_ptr[j * UNROLL_FACTOR + 4] = current_input_row_ptr[j * UNROLL_FACTOR + 4];
+      output_data_start_ptr[j * UNROLL_FACTOR + 5] = current_input_row_ptr[j * UNROLL_FACTOR + 5];
+      output_data_start_ptr[j * UNROLL_FACTOR + 6] = current_input_row_ptr[j * UNROLL_FACTOR + 6];
+      output_data_start_ptr[j * UNROLL_FACTOR + 7] = current_input_row_ptr[j * UNROLL_FACTOR + 7];
     }
-    for (; j < input_w; ++j) {
-      dest_ptr_for_copy[j] = current_input_row_ptr[j];
-    }
-
-    // Zero the 'padding' elements on the right side of the current output row.
-    // The destination starts after the copied input data.
-    j = 0; // Reset inner loop counter
-    double* dest_ptr_for_right_padding = current_output_row_ptr + padding + input_w;
-    for (; j + UNROLL_FACTOR <= padding; j += UNROLL_FACTOR) {
-      dest_ptr_for_right_padding[j] = 0.0;
-      dest_ptr_for_right_padding[j+1] = 0.0;
-      dest_ptr_for_right_padding[j+2] = 0.0;
-      dest_ptr_for_right_padding[j+3] = 0.0;
-    }
-    for (; j < padding; ++j) {
-      dest_ptr_for_right_padding[j] = 0.0;
+    // Handle remainder for input data copy
+    for (int j = (input_w / UNROLL_FACTOR) * UNROLL_FACTOR; j < input_w; ++j) {
+      output_data_start_ptr[j] = current_input_row_ptr[j];
     }
 
-    // Move pointers to the next input and output rows.
+    // Zero the right padding for the current row
+    // The destination starts after the input data.
+    double *output_right_padding_start_ptr = current_output_row_ptr + padding + input_w;
+    for (int j = 0; j < padding / UNROLL_FACTOR; ++j) {
+      output_right_padding_start_ptr[j * UNROLL_FACTOR + 0] = 0.0;
+      output_right_padding_start_ptr[j * UNROLL_FACTOR + 1] = 0.0;
+      output_right_padding_start_ptr[j * UNROLL_FACTOR + 2] = 0.0;
+      output_right_padding_start_ptr[j * UNROLL_FACTOR + 3] = 0.0;
+      output_right_padding_start_ptr[j * UNROLL_FACTOR + 4] = 0.0;
+      output_right_padding_start_ptr[j * UNROLL_FACTOR + 5] = 0.0;
+      output_right_padding_start_ptr[j * UNROLL_FACTOR + 6] = 0.0;
+      output_right_padding_start_ptr[j * UNROLL_FACTOR + 7] = 0.0;
+    }
+    // Handle remainder for right padding
+    for (int j = (padding / UNROLL_FACTOR) * UNROLL_FACTOR; j < padding; ++j) {
+      output_right_padding_start_ptr[j] = 0.0;
+    }
+
+    // Advance pointers to the next rows
+    current_output_row_ptr += padded_w;
     current_input_row_ptr += input_w;
-    current_output_row_ptr += output_w;
   }
 
-  // 3. Zero the bottom 'padding' rows of the output array.
-  // 'current_output_row_ptr' is already positioned at the start of the first bottom padding row.
+  // 3. Zero the bottom 'padding' rows
+  // This loop initializes the bottom padding region of the output array to 0.0.
+  // current_output_row_ptr is already positioned at the start of the bottom padding rows.
   for (int i = 0; i < padding; ++i) {
-    int j = 0;
-    // Unrolled loop for zeroing
-    for (; j + UNROLL_FACTOR <= output_w; j += UNROLL_FACTOR) {
-      current_output_row_ptr[j] = 0.0;
-      current_output_row_ptr[j+1] = 0.0;
-      current_output_row_ptr[j+2] = 0.0;
-      current_output_row_ptr[j+3] = 0.0;
+    // Unrolled loop for zeroing elements in the current row
+    for (int j = 0; j < padded_w / UNROLL_FACTOR; ++j) {
+      current_output_row_ptr[j * UNROLL_FACTOR + 0] = 0.0;
+      current_output_row_ptr[j * UNROLL_FACTOR + 1] = 0.0;
+      current_output_row_ptr[j * UNROLL_FACTOR + 2] = 0.0;
+      current_output_row_ptr[j * UNROLL_FACTOR + 3] = 0.0;
+      current_output_row_ptr[j * UNROLL_FACTOR + 4] = 0.0;
+      current_output_row_ptr[j * UNROLL_FACTOR + 5] = 0.0;
+      current_output_row_ptr[j * UNROLL_FACTOR + 6] = 0.0;
+      current_output_row_ptr[j * UNROLL_FACTOR + 7] = 0.0;
     }
-    // Handle remainder
-    for (; j < output_w; ++j) {
+    // Handle any remaining elements
+    for (int j = (padded_w / UNROLL_FACTOR) * UNROLL_FACTOR; j < padded_w; ++j) {
       current_output_row_ptr[j] = 0.0;
     }
-    current_output_row_ptr += output_w; // Move to the next output row
+    // Advance the output pointer to the next row
+    current_output_row_ptr += padded_w;
   }
 }

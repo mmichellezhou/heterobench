@@ -8,72 +8,81 @@ void gradient_z_calc_optimized(pixel_t frame0[MAX_HEIGHT][MAX_WIDTH],
                      pixel_t gradient_z[MAX_HEIGHT][MAX_WIDTH])
 {
   // Optimization 1: Strength Reduction
-  // Replace division by a constant with multiplication by its reciprocal.
-  // Division is generally much slower than multiplication on CPUs.
-  const pixel_t inverse_12_0f = 1.0f / 12.0f;
+  // Replace division by a constant with multiplication by its inverse.
+  // This is generally faster on most CPUs as multiplication units are often
+  // more plentiful and have lower latency than division units.
+  const pixel_t INV_12 = 1.0f / 12.0f;
 
-  // Optimization 2: Loop Unrolling for Instruction-Level Parallelism (ILP) and reduced loop overhead
-  // Unrolling the inner loop exposes more independent operations to the CPU's
-  // out-of-order execution engine, allowing it to keep more execution units busy.
-  // It also reduces the number of loop control instructions (e.g., branch, increment).
-  // A factor of 4 is a common choice that balances ILP benefits with increased code size
-  // and potential register pressure.
+  // Optimization 2: Register Optimization / Constant Caching
+  // Load the constant `GRAD_WEIGHTS` values into local `const` variables.
+  // This encourages the compiler to keep these frequently used values in CPU registers,
+  // reducing memory access latency and improving instruction-level parallelism.
+  const pixel_t w0 = GRAD_WEIGHTS[0];
+  const pixel_t w1 = GRAD_WEIGHTS[1];
+  const pixel_t w2 = GRAD_WEIGHTS[2];
+  const pixel_t w3 = GRAD_WEIGHTS[3];
+  const pixel_t w4 = GRAD_WEIGHTS[4];
+
+  // Optimization 3: Loop Unrolling
+  // Unroll the inner loop (`c` loop) to reduce loop overhead (branching,
+  // index increments, comparisons) and expose more instruction-level parallelism (ILP).
+  // By processing multiple elements per iteration, the CPU's out-of-order
+  // execution engine can find more independent operations to execute concurrently.
+  // A common unroll factor is 4 or 8. We choose 4 for a balance between
+  // reducing overhead and managing register pressure.
   const int UNROLL_FACTOR = 4;
+  const int WIDTH_ALIGNED = MAX_WIDTH - (MAX_WIDTH % UNROLL_FACTOR);
 
   for (int r = 0; r < MAX_HEIGHT; r ++)
   {
-    int c = 0;
-    // Unrolled loop: Process elements in chunks of UNROLL_FACTOR
-    for (; c <= MAX_WIDTH - UNROLL_FACTOR; c += UNROLL_FACTOR)
+    // Main unrolled loop: Processes elements in blocks of UNROLL_FACTOR
+    for (int c = 0; c < WIDTH_ALIGNED; c += UNROLL_FACTOR)
     {
-      // Optimization 3: Register Accumulation
-      // Use a local temporary variable to accumulate the sum for each pixel.
-      // This avoids redundant memory loads and stores to `gradient_z[r][c]`
-      // within the calculation for a single pixel, allowing the compiler to
-      // keep the intermediate sum in a CPU register.
+      // Optimization 4: Expression Reordering for Instruction-Level Parallelism (ILP)
+      // Combine the additions and multiplications into a single expression.
+      // This allows the compiler to better schedule the loads, multiplications,
+      // and additions, potentially overlapping their execution on different
+      // functional units of the CPU. The initial `gradient_z[r][c] = 0.0f;`
+      // is removed as the first operation is now a direct assignment.
 
-      // Calculate for c
-      pixel_t temp_sum_c0 = frame0[r][c] * GRAD_WEIGHTS[0];
-      temp_sum_c0 += frame1[r][c] * GRAD_WEIGHTS[1];
-      temp_sum_c0 += frame2[r][c] * GRAD_WEIGHTS[2];
-      temp_sum_c0 += frame3[r][c] * GRAD_WEIGHTS[3];
-      temp_sum_c0 += frame4[r][c] * GRAD_WEIGHTS[4];
-      gradient_z[r][c] = temp_sum_c0 * inverse_12_0f; // Apply strength reduction
+      // Calculate gradient for element c
+      gradient_z[r][c] = (frame0[r][c] * w0 +
+                          frame1[r][c] * w1 +
+                          frame2[r][c] * w2 +
+                          frame3[r][c] * w3 +
+                          frame4[r][c] * w4) * INV_12;
 
-      // Calculate for c+1
-      pixel_t temp_sum_c1 = frame0[r][c+1] * GRAD_WEIGHTS[0];
-      temp_sum_c1 += frame1[r][c+1] * GRAD_WEIGHTS[1];
-      temp_sum_c1 += frame2[r][c+1] * GRAD_WEIGHTS[2];
-      temp_sum_c1 += frame3[r][c+1] * GRAD_WEIGHTS[3];
-      temp_sum_c1 += frame4[r][c+1] * GRAD_WEIGHTS[4];
-      gradient_z[r][c+1] = temp_sum_c1 * inverse_12_0f;
+      // Calculate gradient for element c+1
+      gradient_z[r][c+1] = (frame0[r][c+1] * w0 +
+                            frame1[r][c+1] * w1 +
+                            frame2[r][c+1] * w2 +
+                            frame3[r][c+1] * w3 +
+                            frame4[r][c+1] * w4) * INV_12;
 
-      // Calculate for c+2
-      pixel_t temp_sum_c2 = frame0[r][c+2] * GRAD_WEIGHTS[0];
-      temp_sum_c2 += frame1[r][c+2] * GRAD_WEIGHTS[1];
-      temp_sum_c2 += frame2[r][c+2] * GRAD_WEIGHTS[2];
-      temp_sum_c2 += frame3[r][c+2] * GRAD_WEIGHTS[3];
-      temp_sum_c2 += frame4[r][c+2] * GRAD_WEIGHTS[4];
-      gradient_z[r][c+2] = temp_sum_c2 * inverse_12_0f;
+      // Calculate gradient for element c+2
+      gradient_z[r][c+2] = (frame0[r][c+2] * w0 +
+                            frame1[r][c+2] * w1 +
+                            frame2[r][c+2] * w2 +
+                            frame3[r][c+2] * w3 +
+                            frame4[r][c+2] * w4) * INV_12;
 
-      // Calculate for c+3
-      pixel_t temp_sum_c3 = frame0[r][c+3] * GRAD_WEIGHTS[0];
-      temp_sum_c3 += frame1[r][c+3] * GRAD_WEIGHTS[1];
-      temp_sum_c3 += frame2[r][c+3] * GRAD_WEIGHTS[2];
-      temp_sum_c3 += frame3[r][c+3] * GRAD_WEIGHTS[3];
-      temp_sum_c3 += frame4[r][c+3] * GRAD_WEIGHTS[4];
-      gradient_z[r][c+3] = temp_sum_c3 * inverse_12_0f;
+      // Calculate gradient for element c+3
+      gradient_z[r][c+3] = (frame0[r][c+3] * w0 +
+                            frame1[r][c+3] * w1 +
+                            frame2[r][c+3] * w2 +
+                            frame3[r][c+3] * w3 +
+                            frame4[r][c+3] * w4) * INV_12;
     }
 
-    // Remainder loop: Handle any remaining elements if MAX_WIDTH is not a multiple of UNROLL_FACTOR
-    for (; c < MAX_WIDTH; c ++)
+    // Remainder loop: Handles any remaining elements that don't fit into
+    // the unrolled blocks (i.e., when MAX_WIDTH is not a multiple of UNROLL_FACTOR).
+    for (int c = WIDTH_ALIGNED; c < MAX_WIDTH; c ++)
     {
-      pixel_t temp_sum = frame0[r][c] * GRAD_WEIGHTS[0];
-      temp_sum += frame1[r][c] * GRAD_WEIGHTS[1];
-      temp_sum += frame2[r][c] * GRAD_WEIGHTS[2];
-      temp_sum += frame3[r][c] * GRAD_WEIGHTS[3];
-      temp_sum += frame4[r][c] * GRAD_WEIGHTS[4];
-      gradient_z[r][c] = temp_sum * inverse_12_0f;
+      gradient_z[r][c] = (frame0[r][c] * w0 +
+                          frame1[r][c] * w1 +
+                          frame2[r][c] * w2 +
+                          frame3[r][c] * w3 +
+                          frame4[r][c] * w4) * INV_12;
     }
   }
 }

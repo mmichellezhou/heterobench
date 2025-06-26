@@ -115,64 +115,66 @@ Do not include any other text other than the optimized function implementation. 
         Returns:
             The function implementation as a string
         """
-        # Pattern to match function definition and its body
-        pattern = rf'({function_name}\s*\([^{{]*\{{\s*.*?\n}})'
+        # Split code into lines for easier processing
+        lines = complete_code.split('\n')
         
-        # Search for the function with DOTALL flag to match across newlines
-        match = re.search(pattern, complete_code, re.DOTALL)
+        # Find the function by looking for the function name followed by parentheses
+        function_start_line = -1
+        function_end_line = -1
         
-        if match:
-            function_code = match.group(1)
-            
-            # Count braces to find the complete function body
-            open_braces = 0
-            function_start = complete_code.find(match.group(0))
-            
-            # Find the actual start of the function (including return type and signature)
-            lines = complete_code[:function_start + len(match.group(0))].split('\n')
-            
-            # Look backwards to find the function signature start
-            for i in range(len(lines) - 1, -1, -1):
-                if function_name in lines[i]:
-                    # Found the line with function name, now find the return type
-                    j = i
-                    while j >= 0 and not (lines[j].strip().startswith('void') or 
-                                         lines[j].strip().startswith('int') or
-                                         lines[j].strip().startswith('double') or
-                                         lines[j].strip().startswith('float') or
-                                         lines[j].strip().startswith('char') or
-                                         lines[j].strip().startswith('static') or
-                                         lines[j].strip().startswith('template') or
-                                         lines[j].strip().startswith('inline')):
-                        j -= 1
-                    if j >= 0:
-                        function_start_line = j
-                        break
-            
-            # Extract from function start to end
-            lines_from_start = complete_code.split('\n')[function_start_line:]
-            result_lines = []
-            open_braces = 0
-            found_opening_brace = False
-            
-            for line in lines_from_start:
-                result_lines.append(line)
-                
-                # Count braces
-                for char in line:
-                    if char == '{':
-                        open_braces += 1
-                        found_opening_brace = True
-                    elif char == '}':
-                        open_braces -= 1
-                
-                # If we found the opening brace and braces are balanced, we're done
-                if found_opening_brace and open_braces == 0:
-                    break
-            
-            return '\n'.join(result_lines)
+        for i, line in enumerate(lines):
+            # Look for function name followed by parentheses (with possible whitespace)
+            if re.search(rf'\b{re.escape(function_name)}\s*\(', line):
+                function_start_line = i
+                break
         
-        return ""
+        if function_start_line == -1:
+            return ""
+        
+        # Look backwards to find the return type (start of function signature)
+        signature_start_line = function_start_line
+        for i in range(function_start_line, -1, -1):
+            line_stripped = lines[i].strip()
+            # Skip empty lines and comments
+            if not line_stripped or line_stripped.startswith('//') or line_stripped.startswith('/*'):
+                continue
+            # If this line contains the function name, we've found the signature start
+            if function_name in line_stripped:
+                signature_start_line = i
+                break
+            # If this line looks like it could be part of a return type (contains alphanumeric chars)
+            if re.search(r'[a-zA-Z_][a-zA-Z0-9_]*', line_stripped):
+                signature_start_line = i
+            else:
+                # If we hit a line that doesn't look like part of the signature, stop
+                break
+        
+        # Find the end of the function by counting braces
+        open_braces = 0
+        found_opening_brace = False
+        
+        for i in range(signature_start_line, len(lines)):
+            line = lines[i]
+            
+            # Count braces
+            for char in line:
+                if char == '{':
+                    open_braces += 1
+                    found_opening_brace = True
+                elif char == '}':
+                    open_braces -= 1
+            
+            # If we found the opening brace and braces are balanced, we found the end
+            if found_opening_brace and open_braces == 0:
+                function_end_line = i
+                break
+        
+        if function_end_line == -1:
+            return ""
+        
+        # Extract the function
+        function_lines = lines[signature_start_line:function_end_line + 1]
+        return '\n'.join(function_lines)
 
     def _extract_function_body(self, function_code: str) -> str:
         """
@@ -635,9 +637,24 @@ Do not include any other text other than the optimized function implementation. 
         if not os.path.exists(cpu_impl_path):
             raise FileNotFoundError(f"CPU implementation directory not found: {cpu_impl_path}")
         
+        # Load skip files configuration
+        config_path = os.path.join(os.path.dirname(__file__), "config_json", "opt_config.json")
+        skip_files = {}
+        if os.path.exists(config_path):
+            try:
+                with open(config_path, 'r') as f:
+                    config = json.load(f)
+                    skip_files = config.get("skip_files", {})
+            except Exception as e:
+                logging.warning(f"Could not load optimization config: {e}")
+        
         # Get all .cpp files in cpu_impl
         cpp_files = [f for f in os.listdir(cpu_impl_path) if f.endswith('.cpp')]
         
+        # Filter out files that should be skipped for this benchmark
+        files_to_skip = skip_files.get(benchmark_name, [])
+        cpp_files = [f for f in cpp_files if f not in files_to_skip]
+                
         all_results = {}
         
         for cpp_file in cpp_files:
@@ -685,32 +702,37 @@ Do not include any other text other than the optimized function implementation. 
         # Split code into lines for easier processing
         lines = complete_code.split('\n')
         
-        # Find the line containing the function name
+        # Find the function by looking for the function name followed by parentheses
         function_start_line = -1
+        
         for i, line in enumerate(lines):
-            if function_name in line and '(' in line:
+            # Look for function name followed by parentheses (with possible whitespace)
+            if re.search(rf'\b{re.escape(function_name)}\s*\(', line):
                 function_start_line = i
                 break
         
         if function_start_line == -1:
             return ""
         
-        # Look backwards to find the return type
+        # Look backwards to find the return type (start of function signature)
         signature_start_line = function_start_line
         for i in range(function_start_line, -1, -1):
             line_stripped = lines[i].strip()
-            if (line_stripped.startswith('void') or 
-                line_stripped.startswith('int') or
-                line_stripped.startswith('double') or
-                line_stripped.startswith('float') or
-                line_stripped.startswith('char') or
-                line_stripped.startswith('static') or
-                line_stripped.startswith('template') or
-                line_stripped.startswith('inline')):
+            # Skip empty lines and comments
+            if not line_stripped or line_stripped.startswith('//') or line_stripped.startswith('/*'):
+                continue
+            # If this line contains the function name, we've found the signature start
+            if function_name in line_stripped:
                 signature_start_line = i
                 break
+            # If this line looks like it could be part of a return type (contains alphanumeric chars)
+            if re.search(r'[a-zA-Z_][a-zA-Z0-9_]*', line_stripped):
+                signature_start_line = i
+            else:
+                # If we hit a line that doesn't look like part of the signature, stop
+                break
         
-        # Extract lines from return type to the opening brace
+        # Extract lines from signature start to the opening brace
         signature_lines = []
         for i in range(signature_start_line, len(lines)):
             line = lines[i]
@@ -742,36 +764,42 @@ Do not include any other text other than the optimized function implementation. 
         """
         lines = complete_code.split('\n')
         
-        # Find the function start and end
+        # Find the function by looking for the function name followed by parentheses
         function_start_line = -1
         function_end_line = -1
         
-        # Find the line containing the function name
         for i, line in enumerate(lines):
-            if function_name in line and '(' in line:
-                # Look backwards to find the return type
-                for j in range(i, -1, -1):
-                    line_stripped = lines[j].strip()
-                    if (line_stripped.startswith('void') or 
-                        line_stripped.startswith('int') or
-                        line_stripped.startswith('double') or
-                        line_stripped.startswith('float') or
-                        line_stripped.startswith('char') or
-                        line_stripped.startswith('static') or
-                        line_stripped.startswith('template') or
-                        line_stripped.startswith('inline')):
-                        function_start_line = j
-                        break
+            # Look for function name followed by parentheses (with possible whitespace)
+            if re.search(rf'\b{re.escape(function_name)}\s*\(', line):
+                function_start_line = i
                 break
         
         if function_start_line == -1:
             return complete_code  # Function not found, return original
         
+        # Look backwards to find the return type (start of function signature)
+        signature_start_line = function_start_line
+        for i in range(function_start_line, -1, -1):
+            line_stripped = lines[i].strip()
+            # Skip empty lines and comments
+            if not line_stripped or line_stripped.startswith('//') or line_stripped.startswith('/*'):
+                continue
+            # If this line contains the function name, we've found the signature start
+            if function_name in line_stripped:
+                signature_start_line = i
+                break
+            # If this line looks like it could be part of a return type (contains alphanumeric chars)
+            if re.search(r'[a-zA-Z_][a-zA-Z0-9_]*', line_stripped):
+                signature_start_line = i
+            else:
+                # If we hit a line that doesn't look like part of the signature, stop
+                break
+        
         # Find the end of the function by counting braces
         open_braces = 0
         found_opening_brace = False
         
-        for i in range(function_start_line, len(lines)):
+        for i in range(signature_start_line, len(lines)):
             line = lines[i]
             
             # Count braces
@@ -791,7 +819,7 @@ Do not include any other text other than the optimized function implementation. 
             return complete_code  # Could not find function end, return original
         
         # Replace the function
-        new_lines = (lines[:function_start_line] + 
+        new_lines = (lines[:signature_start_line] + 
                     [new_implementation] + 
                     lines[function_end_line + 1:])
         

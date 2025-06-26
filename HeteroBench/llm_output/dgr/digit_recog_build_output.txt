@@ -23,17 +23,17 @@ Done
 Performance Results:
 =======================================
 Original Implementation:
-  update_knn time: 0.00075601 seconds
-  knn_vote time: 8.58437e-08 seconds
-  Single iteration time: 0.000756096 seconds
+  update_knn time: 0.000779476 seconds
+  knn_vote time: 9.20612e-08 seconds
+  Single iteration time: 0.000779568 seconds
 Optimized Implementation:
-  update_knn time: 0.000350005 seconds
-  knn_vote time: 7.00653e-08 seconds
-  Single iteration time: 0.000350075 seconds
+  update_knn time: 0.000349721 seconds
+  knn_vote time: 7.27139e-08 seconds
+  Single iteration time: 0.000349794 seconds
 Speedup:
-  update_knn: 2.16x
-  knn_vote: 1.2252x
-  Total: 2.15981x
-Whole time: 2.21258 seconds
+  update_knn: 2.22885x
+  knn_vote: 1.26607x
+  Total: 2.22865x
+Whole time: 2.25901 seconds
 
 STDERR:
