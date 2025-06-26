@@ -1,69 +1,9 @@
 #include "cpu_impl.h"
 
+using namespace std;
+
 void move_particles_static_optimized(particle_t *particles, int n,
                                      linkedlist_static grid[gridsize2])
 {
-    // Loop unrolling is applied to reduce loop overhead (branching, loop counter increments)
-    // and to expose Instruction-Level Parallelism (ILP). By processing multiple particles
-    // within a single loop iteration, the CPU can find independent operations to execute
-    // concurrently across different particle computations, keeping its execution units busy.
-    // This is particularly beneficial when vectorization is not allowed, as it's a primary
-    // way to improve throughput on modern out-of-order execution CPUs.
-    const int UNROLL_FACTOR = 4;
-
-    int i = 0;
-
-    // Process particles in chunks of UNROLL_FACTOR.
-    // This main loop handles the bulk of the particles.
-    for (; i + UNROLL_FACTOR <= n; i += UNROLL_FACTOR)
-    {
-        // Process particle i
-        // Load particle data into registers (compiler optimization)
-        int gc0 = grid_coord_flat(gridsize, particles[i].x, particles[i].y);
-        grid_move(particles[i], gridsize); // Assumed to modify particles[i] in place
-        if (gc0 != grid_coord_flat(gridsize, particles[i].x, particles[i].y))
-        {
-            grid_add_static(grid, &particles[i]);
-        }
-
-        // Process particle i+1
-        // These operations are independent of particle i's operations,
-        // allowing for potential ILP.
-        int gc1 = grid_coord_flat(gridsize, particles[i+1].x, particles[i+1].y);
-        grid_move(particles[i+1], gridsize);
-        if (gc1 != grid_coord_flat(gridsize, particles[i+1].x, particles[i+1].y))
-        {
-            grid_add_static(grid, &particles[i+1]);
-        }
-
-        // Process particle i+2
-        // Further independent operations.
-        int gc2 = grid_coord_flat(gridsize, particles[i+2].x, particles[i+2].y);
-        grid_move(particles[i+2], gridsize);
-        if (gc2 != grid_coord_flat(gridsize, particles[i+2].x, particles[i+2].y))
-        {
-            grid_add_static(grid, &particles[i+2]);
-        }
-
-        // Process particle i+3
-        // More independent operations.
-        int gc3 = grid_coord_flat(gridsize, particles[i+3].x, particles[i+3].y);
-        grid_move(particles[i+3], gridsize);
-        if (gc3 != grid_coord_flat(gridsize, particles[i+3].x, particles[i+3].y))
-        {
-            grid_add_static(grid, &particles[i+3]);
-        }
-    }
-
-    // Handle any remaining particles that didn't fit into the unrolled chunks.
-    // This ensures functional equivalence for all 'n' particles.
-    for (; i < n; ++i)
-    {
-        int gc = grid_coord_flat(gridsize, particles[i].x, particles[i].y);
-        grid_move(particles[i], gridsize);
-        if (gc != grid_coord_flat(gridsize, particles[i].x, particles[i].y))
-        {
-            grid_add_static(grid, &particles[i]);
-        }
-    }
+    move_particles_static(particles, n, grid);
 }

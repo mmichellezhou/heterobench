@@ -2,40 +2,5 @@
 
 FeatureType Sigmoid_optimized(FeatureType exponent) 
 {
-  // The Sigmoid function is defined as 1.0f / (1.0f + expf(-exponent)).
-  // For single-threaded scalar floating-point operations with strict
-  // "exact functional equivalence" and "no vectorization" constraints,
-  // the opportunities for manual optimization are extremely limited.
-  //
-  // The 'expf' function from the standard library (libm) is typically
-  // highly optimized for the target architecture, often leveraging
-  // specific CPU instructions or highly tuned polynomial approximations
-  // while adhering to IEEE 754 precision requirements.
-  //
-  // Direct replacement of 'expf' with a custom approximation (e.g.,
-  // polynomial, lookup table) would violate the "exact functional equivalence"
-  // requirement due to differences in precision and rounding.
-  //
-  // The arithmetic operations (negation, addition, division) are also
-  // handled very efficiently by modern compilers, which will schedule
-  // them for optimal instruction-level parallelism and utilize FPU capabilities.
-  //
-  // Given the constraints, the most computationally intensive part is 'expf'.
-  // While there are no standard C++ intrinsics that provide a faster, *exact*
-  // 'expf' implementation, some compilers (like GCC/Clang) offer built-in functions
-  // (e.g., __builtin_expf) that correspond to standard library functions.
-  // Using __builtin_expf explicitly can sometimes allow the compiler
-  // more flexibility in optimization (e.g., inlining for constant arguments,
-  // or using specific hardware instructions if available and precise enough),
-  // though for general variable inputs, it often resolves to the same libm call.
-  // This is a minor, compiler-specific hint that adheres to the "compiler intrinsics"
-  // requirement without violating "exact functional equivalence" or "no vectorization".
-  //
-  // No other loop transformations, tiling, unrolling, or memory access
-  // optimizations are applicable as this is a scalar function without loops or arrays.
-  // Strength reduction is not applicable to expf or the division in a way
-  // that maintains exact equivalence and improves performance.
-  // Register optimization is handled by the compiler.
-
-  return 1.0f / (1.0f + __builtin_expf(-exponent));
+  Sigmoid(exponent);
 }
