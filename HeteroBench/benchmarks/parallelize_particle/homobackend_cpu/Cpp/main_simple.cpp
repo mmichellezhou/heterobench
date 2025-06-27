@@ -235,8 +235,8 @@ int main(int argc, char **argv) {
   cout << "Done" << endl;
 
   double whole_time = omp_get_wtime() - start_whole_time;
-  double total_original_time = compute_forces_time + move_particles_time;
-  double total_optimized_time = compute_forces_optimized_time + move_particles_optimized_time;
+  double original_total_time = compute_forces_time + move_particles_time;
+  double optimized_total_time = compute_forces_optimized_time + move_particles_optimized_time;
 
   /* Print results. */
   cout << "=======================================" << endl;
@@ -247,19 +247,19 @@ int main(int argc, char **argv) {
        << " seconds" << endl;
   cout << "  move_particles_static time: " << move_particles_time / nsteps
        << " seconds" << endl;
-  cout << "  Single iteration time: " << total_original_time / nsteps
+  cout << "  Single iteration time: " << original_total_time / nsteps
        << " seconds" << endl;
   cout << "Optimized Implementation:" << endl;
   cout << "  compute_forces_static time: " << compute_forces_optimized_time / nsteps
        << " seconds" << endl;
   cout << "  move_particles_static time: " << move_particles_optimized_time / nsteps
        << " seconds" << endl;
-  cout << "  Single iteration time: " << total_optimized_time / nsteps
+  cout << "  Single iteration time: " << optimized_total_time / nsteps
        << " seconds" << endl;
   cout << "Speedup:" << endl;
   cout << "  compute_forces_static: " << compute_forces_time / compute_forces_optimized_time << " x" << endl;
   cout << "  move_particles_static: " << move_particles_time / move_particles_optimized_time << " x" << endl;
-  cout << "  Total: " << total_original_time / total_optimized_time << " x" << endl;
+  cout << "  Total: " << original_total_time / optimized_total_time << " x" << endl;
   cout << "Whole time: " << whole_time << " seconds" << endl;
 
   if (fsave) {

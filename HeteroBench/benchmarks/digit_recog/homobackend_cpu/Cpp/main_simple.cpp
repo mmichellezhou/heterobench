@@ -129,6 +129,7 @@ int main(int argc, char **argv) {
   int dists[K_CONST];
   int labels[K_CONST];
 
+  /* Correctness tests.*/
   // Warm up and test original implementation
   cout << "Running 1 warm up iteration for original implementation..." << endl;
   for (int i = 0; i < K_CONST; ++i) {
