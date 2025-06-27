@@ -373,15 +373,15 @@ void mlp_forward(string input_path, string output_path) {
   cout << "  Single iteration time: " << optimized_total_time / iterations
        << " seconds" << endl;
   cout << "Speedup:" << endl;
-  cout << "  Layer 0: " << layer_0_time / layer_0_optimized_time << " x"
+  cout << "  Layer 0: " << layer_0_time / layer_0_optimized_time << "x"
        << endl;
-  cout << "  Layer 1: " << layer_1_time / layer_1_optimized_time << " x"
+  cout << "  Layer 1: " << layer_1_time / layer_1_optimized_time << "x"
        << endl;
-  cout << "  Layer 2: " << layer_2_time / layer_2_optimized_time << " x"
+  cout << "  Layer 2: " << layer_2_time / layer_2_optimized_time << "x"
        << endl;
-  cout << "  Layer 3: " << layer_3_time / layer_3_optimized_time << " x"
+  cout << "  Layer 3: " << layer_3_time / layer_3_optimized_time << "x"
        << endl;
-  cout << "  Total: " << original_total_time / optimized_total_time << " x"
+  cout << "  Total: " << original_total_time / optimized_total_time << "x"
        << endl;
   cout << "Whole time: " << whole_time << " seconds" << endl;
 
