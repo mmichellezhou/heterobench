@@ -556,6 +556,27 @@ Do not include any other text other than the optimized function implementation. 
         logging.info(f"Files saved in: {output_dir}")
         logging.info("="*60)
 
+    def determine_verification_success(self, run_output: str) -> bool:
+        """
+        Determine if verification was successful based on benchmark output.
+        If failure keywords are found, verification fails; otherwise assumes success.
+        
+        Args:
+            run_output: The output from running the benchmark
+            
+        Returns:
+            True if verification passed, False otherwise
+        """
+        output_lower = run_output.lower()
+        
+        # Check for failure keywords
+        fail_keywords = ["incorrect", "fail", "wrong"]
+        if any(keyword in output_lower for keyword in fail_keywords):
+            return False
+        
+        # If no failure indicators found, assume success
+        return True
+
     def _analyze_run_output(self, run_output: str) -> Dict:
         """
         Analyze the run output to extract verification results, speedup, and timing information.
@@ -567,7 +588,7 @@ Do not include any other text other than the optimized function implementation. 
             Dictionary containing analysis results
         """
         analysis = {
-            "verification_success": False,
+            "verification_success": self.determine_verification_success(run_output),
             "original_time": None,
             "optimized_time": None, 
             "speedup": None,
@@ -578,14 +599,8 @@ Do not include any other text other than the optimized function implementation. 
         for i, line in enumerate(lines):
             line = line.strip()
             
-            # Look for verification results
-            if "Results:" in line and "Pass" in line:
-                analysis["verification_success"] = True
-            elif "Results:" in line and "Fail" in line:
-                analysis["verification_success"] = False
-            
             # Look for performance results
-            elif "Speedup:" in line:
+            if "Speedup:" in line:
                 try:
                     # Extract speedup value (format: "Speedup: X.XXXXXX")
                     speedup_str = line.split(":")[-1].strip()

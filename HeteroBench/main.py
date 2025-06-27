@@ -58,11 +58,12 @@ HETEROBENCH_BENCHMARKS = {
     "sobel_filter": "benchmarks/sobel_filter"
 }
 
-def run_benchmark_and_analyze(benchmark_name: str, benchmark_path: str, output_dir: str) -> Dict:
+def run_benchmark_and_analyze(generator: HeteroBenchCodeGenerator, benchmark_name: str, benchmark_path: str, output_dir: str) -> Dict:
     """
     Run the benchmark's main_simple.cpp and analyze the output for performance metrics.
     
     Args:
+        generator: The HeteroBenchCodeGenerator instance
         benchmark_name: Name of the benchmark
         benchmark_path: Path to the benchmark directory
         output_dir: Directory to save outputs
@@ -110,10 +111,8 @@ def run_benchmark_and_analyze(benchmark_name: str, benchmark_path: str, output_d
         }
         
         if build_result.returncode == 0:
-            # Check for verification failure
-            output_lower = build_result.stdout.lower()
-            fail_keywords = ["incorrect", "fail", "wrong"]
-            analysis["verification_success"] = not any(keyword in output_lower for keyword in fail_keywords)
+            # Use the agent's verification logic
+            analysis["verification_success"] = generator.determine_verification_success(build_result.stdout)
 
             # Parse the output for performance metrics
             lines = build_result.stdout.split('\n')
@@ -199,7 +198,7 @@ def process_benchmarks(generator: HeteroBenchCodeGenerator, kernel_names: List[s
             function_results = generator.process_benchmark(benchmark_name, benchmark_path, output_dir)
             
             # Run the benchmark and analyze performance
-            performance_analysis = run_benchmark_and_analyze(benchmark_name, benchmark_path, output_dir)
+            performance_analysis = run_benchmark_and_analyze(generator, benchmark_name, benchmark_path, output_dir)
             
             # Collect overall benchmark status
             benchmark_summary = {
