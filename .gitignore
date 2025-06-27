@@ -71,6 +71,19 @@ ppc_sw
 spf_sw
 oha_sw
 
+# Executable optimized files
+krnl_3mm_sw_simple
+krnl_adi_sw_simple
+ced_sw_simple
+cnn_sw_simple
+dgr_sw_simple
+mlp_sw_simple
+oha_sw_simple
+opf_sw_simple
+ppc_sw_simple
+sbf_sw_simple
+spf_sw_simple
+
 # Large dataset files
 /HeteroBench/benchmarks/convolutional_neural_network/input/
 /HeteroBench/benchmarks/convolutional_neural_network/output/
@@ -80,3 +93,51 @@ oha_sw
 /HeteroBench/benchmarks/optical_flow/datasets/output/
 /HeteroBench/benchmarks/one_head_attention/input/
 /HeteroBench/benchmarks/one_head_attention/output/
+
+# Optimized files
+/HeteroBench/benchmarks/3_matrix_multiplication/homobackend_cpu/Cpp/cpu_impl_optimized/kernel_3mm_0_optimized.cpp
+/HeteroBench/benchmarks/3_matrix_multiplication/homobackend_cpu/Cpp/cpu_impl_optimized/kernel_3mm_1_optimized.cpp
+/HeteroBench/benchmarks/3_matrix_multiplication/homobackend_cpu/Cpp/cpu_impl_optimized/kernel_3mm_2_optimized.cpp
+/HeteroBench/benchmarks/alternating_direction_implicit/homobackend_cpu/Cpp/cpu_impl_optimized/init_array_optimized.cpp
+/HeteroBench/benchmarks/alternating_direction_implicit/homobackend_cpu/Cpp/cpu_impl_optimized/kernel_adi_optimized.cpp
+/HeteroBench/benchmarks/canny_edge_detection/homobackend_cpu/Cpp/cpu_impl_optimized/double_thresholding_optimized.cpp
+/HeteroBench/benchmarks/canny_edge_detection/homobackend_cpu/Cpp/cpu_impl_optimized/edge_thinning_optimized.cpp
+/HeteroBench/benchmarks/canny_edge_detection/homobackend_cpu/Cpp/cpu_impl_optimized/gaussian_filter_optimized.cpp
+/HeteroBench/benchmarks/canny_edge_detection/homobackend_cpu/Cpp/cpu_impl_optimized/gradient_intensity_direction_optimized.cpp
+/HeteroBench/benchmarks/canny_edge_detection/homobackend_cpu/Cpp/cpu_impl_optimized/hysteresis_optimized.cpp
+/HeteroBench/benchmarks/convolutional_neural_network/homobackend_cpu/Cpp/cpu_impl_optimized/conv2d_optimized.cpp
+/HeteroBench/benchmarks/convolutional_neural_network/homobackend_cpu/Cpp/cpu_impl_optimized/dot_add_optimized.cpp
+/HeteroBench/benchmarks/convolutional_neural_network/homobackend_cpu/Cpp/cpu_impl_optimized/max_pooling_optimized.cpp
+/HeteroBench/benchmarks/convolutional_neural_network/homobackend_cpu/Cpp/cpu_impl_optimized/pad_input_optimized.cpp
+/HeteroBench/benchmarks/convolutional_neural_network/homobackend_cpu/Cpp/cpu_impl_optimized/relu_optimized.cpp
+/HeteroBench/benchmarks/convolutional_neural_network/homobackend_cpu/Cpp/cpu_impl_optimized/softmax_optimized.cpp
+/HeteroBench/benchmarks/digit_recog/homobackend_cpu/Cpp/cpu_impl_optimized/knn_vote_optimized.cpp
+/HeteroBench/benchmarks/digit_recog/homobackend_cpu/Cpp/cpu_impl_optimized/popcount_optimized.cpp
+/HeteroBench/benchmarks/digit_recog/homobackend_cpu/Cpp/cpu_impl_optimized/update_knn_optimized.cpp
+/HeteroBench/benchmarks/multilayer_perceptron/homobackend_cpu/Cpp/cpu_impl_optimized/dot_add_optimized.cpp
+/HeteroBench/benchmarks/multilayer_perceptron/homobackend_cpu/Cpp/cpu_impl_optimized/sigmoid_optimized.cpp
+/HeteroBench/benchmarks/multilayer_perceptron/homobackend_cpu/Cpp/cpu_impl_optimized/softmax_optimized.cpp
+/HeteroBench/benchmarks/one_head_attention/homobackend_cpu/Cpp/cpu_impl_optimized/matmul_optimized.cpp
+/HeteroBench/benchmarks/one_head_attention/homobackend_cpu/Cpp/cpu_impl_optimized/softmax_optimized.cpp
+/HeteroBench/benchmarks/one_head_attention/homobackend_cpu/Cpp/cpu_impl_optimized/transpose_optimized.cpp
+/HeteroBench/benchmarks/optical_flow/homobackend_cpu/Cpp/cpu_impl_optimized/flow_calc_optimized.cpp
+/HeteroBench/benchmarks/optical_flow/homobackend_cpu/Cpp/cpu_impl_optimized/gradient_weight_x_optimized.cpp
+/HeteroBench/benchmarks/optical_flow/homobackend_cpu/Cpp/cpu_impl_optimized/gradient_weight_y_optimized.cpp
+/HeteroBench/benchmarks/optical_flow/homobackend_cpu/Cpp/cpu_impl_optimized/gradient_xy_calc_optimized.cpp
+/HeteroBench/benchmarks/optical_flow/homobackend_cpu/Cpp/cpu_impl_optimized/gradient_z_calc_optimized.cpp
+/HeteroBench/benchmarks/optical_flow/homobackend_cpu/Cpp/cpu_impl_optimized/outer_product_optimized.cpp
+/HeteroBench/benchmarks/optical_flow/homobackend_cpu/Cpp/cpu_impl_optimized/tensor_weight_x_optimized.cpp
+/HeteroBench/benchmarks/optical_flow/homobackend_cpu/Cpp/cpu_impl_optimized/tensor_weight_y_optimized.cpp
+/HeteroBench/benchmarks/parallelize_particle/homobackend_cpu/Cpp/cpu_impl_optimized/compute_forces_static_optimized.cpp
+/HeteroBench/benchmarks/parallelize_particle/homobackend_cpu/Cpp/cpu_impl_optimized/grid_optimized.cpp
+/HeteroBench/benchmarks/parallelize_particle/homobackend_cpu/Cpp/cpu_impl_optimized/move_particles_static_optimized.cpp
+/HeteroBench/benchmarks/sobel_filter/homobackend_cpu/Cpp/cpu_impl_optimized/compute_gradient_magnitude_optimized.cpp
+/HeteroBench/benchmarks/sobel_filter/homobackend_cpu/Cpp/cpu_impl_optimized/sobel_filter_x_optimized.cpp
+/HeteroBench/benchmarks/sobel_filter/homobackend_cpu/Cpp/cpu_impl_optimized/sobel_filter_y_optimized.cpp
+/HeteroBench/benchmarks/spam_filter/homobackend_cpu/Cpp/cpu_impl_optimized/computeGradient_optimized.cpp
+/HeteroBench/benchmarks/spam_filter/homobackend_cpu/Cpp/cpu_impl_optimized/dotProduct_optimized.cpp
+/HeteroBench/benchmarks/spam_filter/homobackend_cpu/Cpp/cpu_impl_optimized/Sigmoid_optimized.cpp
+/HeteroBench/benchmarks/spam_filter/homobackend_cpu/Cpp/cpu_impl_optimized/updateParameter_optimized.cpp
+
+# LLM Output
+/HeteroBench/llm_output/
