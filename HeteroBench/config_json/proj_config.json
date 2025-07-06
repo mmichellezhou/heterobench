@@ -8,7 +8,7 @@
                 "output": "benchmarks/canny_edge_detection/output/1439x1919_stanford.jpg",
                 "low_threshold": 30,
                 "high_threshold": 90,
-                "iteration_times": 1
+                "iteration_times": 5
             },
             "source": "main.cpp",
             "source_simple": "main_simple.cpp",
@@ -41,7 +41,7 @@
                 "output": "benchmarks/optical_flow/datasets/output/acc_output.flo",
                 "max_height": 2160,
                 "max_width": 3840,
-                "iteration_times": 1
+                "iteration_times": 5
             },
             "source": "main.cpp",
             "source_simple": "main_simple.cpp",
@@ -78,7 +78,7 @@
             "parameters": {
                 "input": "benchmarks/sobel_filter/input/1439x1919_stanford.jpg",
                 "output": "benchmarks/sobel_filter/output/1439x1919_stanford.jpg",
-                "iteration_times": 1
+                "iteration_times": 5
             },
             "source": "main.cpp",
             "source_simple": "main_simple.cpp",
@@ -105,7 +105,7 @@
             "parameters": {
                 "input": "benchmarks/convolutional_neural_network/input",
                 "output": "benchmarks/convolutional_neural_network/output",
-                "iteration_times": 1,
+                "iteration_times": 5,
                 "conv2d_stride": 1,
                 "conv2d_padding": 1,
                 "conv2d_bias": 0.1,
@@ -148,7 +148,7 @@
             "parameters": {
                 "input": "benchmarks/multilayer_perceptron/input",
                 "output": "benchmarks/multilayer_perceptron/output",
-                "iteration_times": 1,
+                "iteration_times": 5,
                 "layer0_h1": 256,
                 "layer0_w1": 128,
                 "layer0_w2": 512,
@@ -187,7 +187,7 @@
             "parameters": {
                 "input": "benchmarks/one_head_attention/input",
                 "output": "benchmarks/one_head_attention/output",
-                "iteration_times": 1,
+                "iteration_times": 5,
                 "batch_size": 8,
                 "N": 1024,
                 "d": 128
@@ -249,7 +249,7 @@
             "parameters": {
                 "input": "benchmarks/spam_filter/data",
                 "output": "",
-                "iteration_times": 1,
+                "iteration_times": 5,
                 "num_features": 10000,
                 "num_samples": 5000,
                 "num_training": 4500,
@@ -284,7 +284,7 @@
             "parameters": {
                 "input": "",
                 "output": "",
-                "iteration_times": 1,
+                "iteration_times": 5,
                 "ni": 1024,
                 "nj": 1024,
                 "nk": 1024,
@@ -316,7 +316,7 @@
             "parameters": {
                 "input": "",
                 "output": "",
-                "iteration_times": 1,
+                "iteration_times": 5,
                 "tsteps": 50,
                 "n": 1024
             },
@@ -343,7 +343,7 @@
             "parameters": {
                 "input": "",
                 "output": "",
-                "iteration_times": 1,
+                "iteration_times": 5,
                 "nparticles": 100000,
                 "savefreq": 10
             },

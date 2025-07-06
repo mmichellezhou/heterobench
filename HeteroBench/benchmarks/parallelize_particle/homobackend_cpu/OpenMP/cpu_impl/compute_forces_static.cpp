@@ -24,24 +24,53 @@
 
 using namespace std;
 
-void move_particles_static(particle_t* particles, int n, linkedlist_static grid[gridsize2])
+inline int Min(int a, int b) { return a < b ? a : b; }
+inline int Max(int a, int b) { return a > b ? a : b; }
+
+//
+//  interact two particles
+//
+void apply_force_static(particle_t& particle, particle_t& neighbor)
 {
-	#pragma omp parallel for
+	double dx = neighbor.x - particle.x;
+	double dy = neighbor.y - particle.y;
+	double r2 = dx * dx + dy * dy;
+	if (r2 > cutoff * cutoff)
+		return;
+	r2 = fmax(r2, min_r * min_r);
+	double r = sqrt(r2);
+
+	//
+	//  very simple short-range repulsive force
+	//
+	double coef = (1 - cutoff / r) / r2 / mass;
+	particle.ax += coef * dx;
+	particle.ay += coef * dy;
+}
+
+void compute_forces_static(particle_t* particles, int n, linkedlist_static grid_static[gridsize2])
+{
 	for (int i = 0; i < n; i++)
 	{
-		int gc = grid_coord_flat(gridsize, particles[i].x, particles[i].y);
+		// Reset acceleration
+		particles[i].ax = particles[i].ay = 0;
 
-		grid_move(particles[i], gridsize);
+		// Use the grid to traverse neighbours
+		int gx = grid_coord(particles[i].x);
+		int gy = grid_coord(particles[i].y);
 
-		// Re-add the particle if it has changed grid position
-		if (gc != grid_coord_flat(gridsize, particles[i].x, particles[i].y))
+		for (int x = Max(gx - 1, 0); x <= Min(gx + 1, gridsize - 1); x++)
 		{
-			// if (! grid_remove(grid, &particles[i], gc))
-			// {
-			// 	fprintf(stdout, "Error: Failed to remove particle '%p'. Code must be faulty. Blame source writer.\n", &particles[i]);
-			// 	exit(3);
-			// }
-			grid_add_static(grid, &particles[i]);
+			for (int y = Max(gy - 1, 0); y <= Min(gy + 1, gridsize - 1); y++)
+			{
+				linkedlist_static* curr = &grid_static[x * gridsize + y];
+				int t = curr->index_now;
+				while (t != 0)
+				{
+					apply_force_static(particles[i], (curr->value[t]));
+					t--;
+				}
+			}
 		}
 	}
 }

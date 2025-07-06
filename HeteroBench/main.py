@@ -90,11 +90,12 @@ def run_benchmark_and_analyze(generator: HeteroBenchCodeGenerator, benchmark_nam
             timeout=300
         )
         
-        # Ensure output directory exists
-        os.makedirs(output_dir, exist_ok=True)
+        # Create benchmark-specific output directory
+        benchmark_output_dir = os.path.join(output_dir, benchmark_name)
+        os.makedirs(benchmark_output_dir, exist_ok=True)
         
-        # Save build output
-        with open(os.path.join(output_dir, f"{benchmark_name}_build_output.txt"), 'w') as f:
+        # Save build output in benchmark-specific directory
+        with open(os.path.join(benchmark_output_dir, f"{benchmark_name}_build_output.txt"), 'w') as f:
             f.write("BUILD COMMAND: make run_simple\n")
             f.write("STDOUT:\n")
             f.write(build_result.stdout)
@@ -200,21 +201,25 @@ def process_benchmarks(generator: HeteroBenchCodeGenerator, kernel_names: List[s
             # Run the benchmark and analyze performance
             performance_analysis = run_benchmark_and_analyze(generator, benchmark_name, benchmark_path, output_dir)
             
-            # Collect overall benchmark status
-            benchmark_summary = {
-                "function_results": function_results,
-                "performance_analysis": performance_analysis,
-                "overall_status": {
-                    "functions_processed": len(function_results),
-                    "functions_successful": sum(1 for r in function_results.values() if r.get("function_generation_success", False)),
-                    "build_success": performance_analysis.get("build_success", False),
-                    "verification_success": performance_analysis.get("verification_success", False)
-                }
-            }
+            # Check if all functions were generated successfully
+            kernel_generation_success = True
+            for func_name, func_data in function_results.items():
+                if not func_data.get("function_generation_success", False):
+                    kernel_generation_success = False
+                    break
             
-            # Add speedup if available
-            if performance_analysis.get("speedup") is not None:
-                benchmark_summary["speedup"] = performance_analysis["speedup"]
+            # Create flat benchmark summary
+            benchmark_summary = {
+                "kernel_generation_success": kernel_generation_success,
+                "compilation_success": performance_analysis.get("build_success", False),
+                "execution_success": performance_analysis.get("build_success", False),  # Assume execution succeeds if build succeeds
+                "verification_success": performance_analysis.get("verification_success", False),
+                "speedup": performance_analysis.get("speedup"),
+                "original_time": performance_analysis.get("original_time"),
+                "optimized_time": performance_analysis.get("optimized_time"),
+                "functions_processed": len(function_results),
+                "functions_successful": sum(1 for r in function_results.values() if r.get("function_generation_success", False))
+            }
             
             all_results[benchmark_name] = benchmark_summary
             
@@ -230,13 +235,16 @@ def process_benchmarks(generator: HeteroBenchCodeGenerator, kernel_names: List[s
         except Exception as e:
             logging.error(f"✗ Error processing benchmark '{benchmark_name}': {str(e)}")
             all_results[benchmark_name] = {
-                "error": str(e),
-                "overall_status": {
-                    "functions_processed": 0,
-                    "functions_successful": 0,
-                    "build_success": False,
-                    "verification_success": False
-                }
+                "kernel_generation_success": False,
+                "compilation_success": False,
+                "execution_success": False,
+                "verification_success": False,
+                "speedup": None,
+                "original_time": None,
+                "optimized_time": None,
+                "functions_processed": 0,
+                "functions_successful": 0,
+                "error": str(e)
             }
     
     # Save aggregated results

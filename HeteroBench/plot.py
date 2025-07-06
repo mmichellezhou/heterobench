@@ -21,35 +21,22 @@ def plot_speedup(work_dir):
     for i, kernel in enumerate(kernels):
         kernel_data = data[kernel]
         
-        # Check if there's an error
-        if "error" in kernel_data:
+        # Check for different types of errors
+        if not kernel_data['kernel_generation_success']:
             error_indices.append(i)
-            error_types.append('error')
-            continue
-        
-        # Extract speedup from performance analysis
-        performance_analysis = kernel_data.get('performance_analysis', {})
-        speedup = performance_analysis.get('speedup')
-        
-        if speedup is not None:
-            successful_indices.append(i)
-            successful_speedups.append(speedup)
+            error_types.append('kernel_gen')
+        elif not kernel_data['compilation_success']:
+            error_indices.append(i)
+            error_types.append('compile')
+        elif not kernel_data['execution_success']:
+            error_indices.append(i)
+            error_types.append('runtime')
+        elif not kernel_data['verification_success']:
+            error_indices.append(i)
+            error_types.append('verification')
         else:
-            # Check for different types of failures
-            overall_status = kernel_data.get('overall_status', {})
-            
-            if not overall_status.get('build_success', True):
-                error_indices.append(i)
-                error_types.append('build')
-            elif not overall_status.get('verification_success', True):
-                error_indices.append(i)
-                error_types.append('verification')
-            elif overall_status.get('functions_successful', 0) == 0:
-                error_indices.append(i)
-                error_types.append('optimization')
-            else:
-                error_indices.append(i)
-                error_types.append('unknown')
+            successful_indices.append(i)
+            successful_speedups.append(kernel_data['speedup'])
 
     # Set up the plot
     plt.figure(figsize=(15, 8))
@@ -74,15 +61,14 @@ def plot_speedup(work_dir):
 
     # Add error markers
     error_colors = {
-        'error': 'red',
-        'build': 'orange',
-        'verification': 'green',
-        'optimization': 'purple',
-        'unknown': 'brown'
+        'kernel_gen': 'red',
+        'compile': 'orange',
+        'runtime': 'purple',
+        'verification': 'green'
     }
 
     for i, error_type in zip(error_indices, error_types):
-        plt.plot(i, 1, 'x', color=error_colors[error_type], markersize=10, markeredgewidth=2)
+        plt.plot(i, 0.1, 'x', color=error_colors[error_type], markersize=10, markeredgewidth=2)
 
     # Customize the plot
     plt.xticks(range(len(kernels)), kernels, rotation=45, ha='right')
