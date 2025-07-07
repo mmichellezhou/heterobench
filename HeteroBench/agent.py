@@ -460,24 +460,6 @@ Do not include any other text other than the optimized function implementation. 
         with open(os.path.join(output_dir, f"{function_name}_llm_response.txt"), 'w') as f:
             f.write(results['llm_response'] if results['llm_response'] is not None else "")
 
-        # Save compilation and execution logs
-        if 'compile_and_run' in results:
-            comp_results = results['compile_and_run']
-            with open(os.path.join(output_dir, f"{function_name}_compile_output.txt"), 'w') as f:
-                f.write("COMPILATION COMMAND:\n")
-                f.write(comp_results.get('compile_cmd', ''))
-                f.write("\n\nSTDOUT:\n")
-                f.write(comp_results.get('compile_output', ''))
-                f.write("\n\nSTDERR:\n")
-                f.write(comp_results.get('compile_error', ''))
-            with open(os.path.join(output_dir, f"{function_name}_execution_output.txt"), 'w') as f:
-                f.write("EXECUTION COMMAND:\n")
-                f.write(comp_results.get('executable', ''))
-                f.write("\n\nSTDOUT:\n")
-                f.write(comp_results.get('run_output', ''))
-                f.write("\n\nSTDERR:\n")
-                f.write(comp_results.get('run_error', ''))
-
         # Save the final optimized C++ file in llm_output
         if results.get('optimized_complete_code'):
             optimized_file_name = f"{function_name}_optimized.cpp"
@@ -490,28 +472,12 @@ Do not include any other text other than the optimized function implementation. 
             "original_file_path": results.get('original_file_path', ''),
             "optimized_file_path": results.get('optimized_file_path', ''),
             "function_generation_success": results.get('function_generation_success', False),
-            "compilation_success": results.get('compilation_success', False),
-            "execution_success": results.get('execution_success', False),
-            "verification_success": results.get('verification_success', False),
             "num_code_blocks_generated": results.get('num_code_blocks', 0),
             "optimized_code_length": len(results.get('optimized_code_generated') or ''),
             "prompt_length": len(results.get('prompt', '')),
             "llm_response_length": len(results.get('llm_response') or ''),
-            "entire_llm_response": results.get('entire_llm_response', ''),
-            "compile_output_length": len(results.get('compile_and_run', {}).get('compile_output', '')) if 'compile_and_run' in results else 0,
-            "compile_error_length": len(results.get('compile_and_run', {}).get('compile_error', '')) if 'compile_and_run' in results else 0,
-            "run_output_length": len(results.get('compile_and_run', {}).get('run_output', '')) if 'compile_and_run' in results else 0,
-            "run_error_length": len(results.get('compile_and_run', {}).get('run_error', '')) if 'compile_and_run' in results else 0,
-            "original_time": None,
-            "optimized_time": None,
-            "speedup": None
+            "entire_llm_response": results.get('entire_llm_response', '')
         }
-        # Add timing and speedup if available
-        if 'run_analysis' in results:
-            run_analysis = results['run_analysis']
-            summary["original_time"] = run_analysis.get('original_time')
-            summary["optimized_time"] = run_analysis.get('optimized_time')
-            summary["speedup"] = run_analysis.get('speedup')
 
         # Save summary
         with open(os.path.join(output_dir, f"{function_name}_summary.json"), 'w') as f:
@@ -523,11 +489,6 @@ Do not include any other text other than the optimized function implementation. 
         logging.info("="*60)
         logging.info(f"Function: {function_name}")
         logging.info(f"Function Generation Success: {'✓' if summary['function_generation_success'] else '✗'}")
-        logging.info(f"Compilation Success: {'✓' if summary['compilation_success'] else '✗'}")
-        logging.info(f"Execution Success: {'✓' if summary['execution_success'] else '✗'}")
-        logging.info(f"Verification Success: {'✓' if summary['verification_success'] else '✗'}")
-        if summary['speedup'] is not None:
-            logging.info(f"Speedup: {summary['speedup']:.2f}x")
         logging.info(f"Files saved in: {output_dir}")
         logging.info("="*60)
 
