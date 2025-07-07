@@ -33,7 +33,7 @@ class HeteroBenchCodeGenerator:
         Returns:
             Formatted prompt string
         """
-        prompt = f"""You are an expert in high-performance computing and kernel engineering on the CPU. You are familiar with different optimization techniques including vectorization, memory access optimization, tiling, unrolling, loop transformations, and SIMD instructions. Focus on single-threaded performance improvement. Don't use multi-threading nor vectorization.
+        prompt = f"""You are an expert in high-performance computing and kernel engineering on the CPU. You are familiar with different optimized libraries and their performance characteristics. You also know the performance improvement techniques, including vectorization, memory access optimization, tiling, unrolling, etc. Here we focus on the single-threaded performance improvement. Don't use multi-threading nor vectorization. 
 
 Given the following code:
 ```cpp
@@ -45,7 +45,7 @@ with the following function to optimize:
 {function_code}
 ```
 
-Task: Analyze this function and generate an optimized implementation to get better performance while maintaining functional equivalence. Apply optimizations such as memory access optimization, tiling, unrolling, loop transformations, strength reduction, register optimization, and instruction-level parallelism.
+Task: Analyze this kernel and generate an optimized kernel implementation to get better performance while maintaining functional equivalence. Consider applying optimizations directly to the kernel, such as vectorization, memory access optimization, tiling, unrolling, etc. You should only use single thread for the optimized kernel implementation.
 
 Machine we are using: 
 - Intel(R) Xeon(R) Gold 6248R CPU @ 3.00GHz
@@ -56,20 +56,18 @@ Machine we are using:
 - Supports SSE, AVX2, AVX512
 
 Requirements:
-1. Optimize the function for better single-threaded performance
-2. Maintain exact functional equivalence
-3. Use appropriate compiler intrinsics and optimizations
-4. Focus on the most impactful optimizations for this specific function
-5. Only use variables, constants, and types that are already available in the function scope
-6. Do not define any constants, macros, or types that would need to be defined outside the function body
+1. Optimize the function for better single-threaded performance.
+2. Include necessary headers and initialization code. 
+3. Ensure functional equivalence.
+4. If no optimizations can get good performance, then just fallback to the default implementation.
 
 Output format:
-You should only output the optimized function implementation which follows the exact function signature as follows: 
+You should output the optimized function implementation which follows the exact function signature as follows, including necessary headers and dependencies: 
 ```cpp
 {optimized_func_signature}
 ```
 
-Do not include any other text other than the optimized function implementation. ONLY output the optimized function implementation within the code block.
+Do not include any other text other than the optimized function implementation and necessary headers and dependencies.
 """
         return prompt
     
