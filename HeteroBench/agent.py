@@ -33,7 +33,7 @@ class HeteroBenchCodeGenerator:
         Returns:
             Formatted prompt string
         """
-        prompt = f"""You are an expert in high-performance computing and kernel engineering on the CPU. You are familiar with different optimized libraries and their performance characteristics. You also know the performance improvement techniques, including vectorization, memory access optimization, tiling, unrolling, etc. Here we focus on the single-threaded performance improvement. Don't use multi-threading nor vectorization. 
+        prompt = f"""You are an expert in high-performance computing and kernel engineering on the CPU. You are familiar with different optimization techniques including vectorization, memory access optimization, tiling, unrolling, loop transformations, and SIMD instructions. Focus on single-threaded performance improvement. Don't use multi-threading nor vectorization.
 
 Given the following code:
 ```cpp
@@ -45,7 +45,7 @@ with the following function to optimize:
 {function_code}
 ```
 
-Task: Analyze this kernel and generate an optimized kernel implementation to get better performance while maintaining functional equivalence. Consider applying optimizations directly to the kernel, such as vectorization, memory access optimization, tiling, unrolling, etc. You should only use single thread for the optimized kernel implementation.
+Task: Analyze this function and generate an optimized implementation to get better performance while maintaining functional equivalence. Apply optimizations such as memory access optimization, tiling, unrolling, loop transformations, strength reduction, register optimization, and instruction-level parallelism.
 
 Machine we are using: 
 - Intel(R) Xeon(R) Gold 6248R CPU @ 3.00GHz
@@ -57,17 +57,18 @@ Machine we are using:
 
 Requirements:
 1. Optimize the function for better single-threaded performance.
-2. Include necessary headers and initialization code. 
-3. Ensure functional equivalence.
-4. If no optimizations can get good performance, then just fallback to the default implementation.
+2. Ensure functional equivalence.
+3. Include all original and any new headers/dependencies.
+4. Assume all variables and helper functions used inside the target function are already defined.
+5. If no optimizations can get good performance, then just fallback to the default implementation.
 
 Output format:
-You should output the optimized function implementation which follows the exact function signature as follows, including necessary headers and dependencies: 
+You should output the optimized function implementation with the exact function signature as follows:
 ```cpp
 {optimized_func_signature}
 ```
 
-Do not include any other text other than the optimized function implementation and necessary headers and dependencies.
+Do not include any other text other than the optimized function implementation and necessary headers/dependencies.
 """
         return prompt
     
@@ -405,22 +406,17 @@ Do not include any other text other than the optimized function implementation a
         # Call LLM
         response, entire_response = self.call_llm(prompt)
         
-        # Extract code blocks
-        code_blocks = self._extract_code_blocks(response)
+        # Use the entire LLM response as the optimized code, but strip markdown code block markers
+        def strip_code_block_markers(text):
+            import re
+            # Remove triple backtick code blocks (with or without language)
+            return re.sub(r'^```[a-zA-Z]*\n?|```$', '', text.strip(), flags=re.MULTILINE).strip()
         
-        # Find the main implementation (usually the longest code block)
-        optimized_code_generated = None
-        function_generation_success = False
-        if response and code_blocks:
-            optimized_code_generated = max(code_blocks, key=len)
-            function_generation_success = True
+        optimized_code_generated = strip_code_block_markers(response) if response else ""
+        function_generation_success = bool(optimized_code_generated)
         
-        # Generate optimized complete code by replacing the optimized function
-        optimized_complete_code = optimized_file_content
-        if optimized_code_generated:
-            optimized_complete_code = self._replace_function_in_code(
-                optimized_file_content, optimized_function_name, optimized_code_generated
-            )
+        # The optimized file is just the code (no markdown)
+        optimized_complete_code = optimized_code_generated
         
         # Save the updated optimized file
         os.makedirs(optimized_dir, exist_ok=True)
@@ -434,7 +430,7 @@ Do not include any other text other than the optimized function implementation a
             "llm_response": response,
             "entire_llm_response": entire_response,
             "optimized_code_generated": optimized_code_generated,
-            "num_code_blocks": len(code_blocks),
+            "num_code_blocks": 1 if response else 0,
             "optimized_complete_code": optimized_complete_code,
             "optimized_file_path": optimized_file_path,
             "function_generation_success": function_generation_success
