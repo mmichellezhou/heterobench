@@ -3,7 +3,7 @@
         "python_command": "python3",
         "standard_c++": {
             "compiler": "clang++",
-            "cxxflags": "-Wall -Wextra -pedantic -std=c++11 -fopenmp",
+            "cxxflags": "-Wall -Wextra -pedantic -std=c++11 -fopenmp -march=native",
             "ldflags": "-fopenmp",
             "openmp_libs": "-lgomp",
             "openmp_offload_libs": "",
