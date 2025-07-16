@@ -37,6 +37,15 @@ INCLUDE_DIRS_SIMPLE := cpu_impl/include cpu_impl_optimized/include .
 INCLUDE_PARAMS := $(addprefix -I, $(INCLUDE_DIRS))
 INCLUDE_PARAMS_SIMPLE := $(addprefix -I, $(INCLUDE_DIRS_SIMPLE))
 
+# MKL support
+ifeq ($(USE_MKL),1)
+ifndef MKLROOT
+$(error MKLROOT is not set. Please source the Intel oneAPI environment (e.g., source /opt/intel/oneapi/setvars.sh))
+endif
+CXXFLAGS += -DMKL_ILP64 -I$(MKLROOT)/include
+LDFLAGS += -L$(MKLROOT)/lib/intel64 -lmkl_intel_ilp64 -lmkl_sequential -lmkl_core -lpthread -lm -ldl
+endif
+
 # Default target
 all: $(TARGET_EXEC) $(TARGET_EXEC_SIMPLE)
 
