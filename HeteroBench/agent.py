@@ -39,7 +39,7 @@ class HeteroBenchCodeGenerator:
         Returns:
             Formatted prompt string
         """
-        prompt = f"""You are an expert in high-performance computing and kernel engineering on the CPU. You are familiar with different optimization techniques including MKL, memory access optimization, tiling, unrolling, loop transformations, and SIMD instructions. Focus on single-threaded performance improvement. Don't use multi-threading nor vectorization.
+        prompt = f"""You are an expert in high-performance computing and kernel engineering on the CPU. You are familiar with different optimization techniques including vectorization, memory access optimization, tiling, unrolling, loop transformations, SIMD instructions, and MKL. Focus on single-threaded performance improvement. Don't use multi-threading.
 
         Given the following code:
         ```cpp
@@ -51,7 +51,7 @@ class HeteroBenchCodeGenerator:
         {function_code}
         ```
 
-        Task: Analyze this kernel and generate an optimized kernel implementation to get better performance while maintaining functional equivalence. You should first consider if the kernel can be implemented using a single corresponding MKL function. If not, consider if the kernel can be decomposed into multiple MKL calls. If there is no way to implement the kernel using MKL, or you think MKL cannot get good performance, then consider applying optimizations directly to the kernel, such as memory access optimization, tiling, unrolling, etc. You should only use single thread for the optimized kernel implementation.
+        Task: Analyze this kernel and generate an optimized kernel implementation to get better performance while maintaining functional equivalence. Consider applying optimizations directly to the kernel, such as vectorization, memory access optimization, tiling, unrolling, MKL, etc. You should only use single thread for the optimized kernel implementation.
 
         Machine we are using: 
         - Intel(R) Xeon(R) Gold 6248R CPU @ 3.00GHz
