@@ -65,6 +65,7 @@ def process_benchmarks(
     output_dir: str,
     model: str,
     provider: str,
+    max_iterations: int = 1,
 ) -> Dict:
     """
     Process a list of HeteroBench benchmarks and save the results.
@@ -75,6 +76,7 @@ def process_benchmarks(
         output_dir: Base output directory
         model: Model name being used
         provider: Provider name being used
+        max_iterations: Number of feedback iterations to fix compilation/runtime errors
 
     Returns:
         Dictionary containing results for all processed benchmarks
@@ -96,7 +98,7 @@ def process_benchmarks(
         try:
             # Process all functions in the benchmark (includes compilation and running)
             benchmark_results = generator.process_benchmark(
-                benchmark_name, benchmark_path, output_dir
+                benchmark_name, benchmark_path, output_dir, max_iterations=max_iterations
             )
 
             # Extract summary information from the agent's results
@@ -189,6 +191,10 @@ def main():
     parser.add_argument(
         "--all", action="store_true", help="Process all available benchmarks"
     )
+    parser.add_argument(
+        "--max_iterations", type=int, default=1,
+        help="Number of feedback iterations to fix compilation/runtime errors."
+    )
     args = parser.parse_args()
 
     # Create output directory first
@@ -219,11 +225,12 @@ def main():
                 output_dir,
                 args.model,
                 args.provider,
+                max_iterations=args.max_iterations,
             )
         else:
             # Process specified benchmarks
             process_benchmarks(
-                generator, args.kernel, output_dir, args.model, args.provider
+                generator, args.kernel, output_dir, args.model, args.provider, max_iterations=args.max_iterations
             )
 
     except ValueError as e:
