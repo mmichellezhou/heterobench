@@ -99,3 +99,6 @@ spf_sw_simple
 
 # LLM Output
 /HeteroBench/llm_output/
+
+# PolyBench files (reference implementation - should not be tracked)
+/polybench/
