@@ -5,6 +5,7 @@ import seaborn as sns
 import argparse
 import os
 
+
 def plot_speedup(work_dir):
     # Read the JSON file
     summary_file = os.path.join(work_dir, "all_summary.json")

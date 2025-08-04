@@ -323,7 +323,7 @@ int main(int argc, char **argv) {
        << " seconds" << endl;
   cout << "  edge_thinning time: " << supp_time / iterations << " seconds"
        << endl;
-  cout << "  double_threshold time: " << threshold_time / iterations
+  cout << "  double_thresholding time: " << threshold_time / iterations
        << " seconds" << endl;
   cout << "  hysteresis time: " << hysteresis_time / iterations << " seconds"
        << endl;
@@ -336,7 +336,7 @@ int main(int argc, char **argv) {
        << gradient_time_optimized / iterations << " seconds" << endl;
   cout << "  edge_thinning time: " << supp_time_optimized / iterations
        << " seconds" << endl;
-  cout << "  double_threshold time: " << threshold_time_optimized / iterations
+  cout << "  double_thresholding time: " << threshold_time_optimized / iterations
        << " seconds" << endl;
   cout << "  hysteresis time: " << hysteresis_time_optimized / iterations
        << " seconds" << endl;
@@ -348,7 +348,7 @@ int main(int argc, char **argv) {
   cout << "  gradient_intensity_direction: "
        << gradient_time / gradient_time_optimized << "x" << endl;
   cout << "  edge_thinning: " << supp_time / supp_time_optimized << "x" << endl;
-  cout << "  double_threshold: " << threshold_time / threshold_time_optimized
+  cout << "  double_thresholding: " << threshold_time / threshold_time_optimized
        << "x" << endl;
   cout << "  hysteresis: " << hysteresis_time / hysteresis_time_optimized << "x"
        << endl;
