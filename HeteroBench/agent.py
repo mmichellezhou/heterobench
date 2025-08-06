@@ -22,6 +22,20 @@ class KernelCodeGenerator:
         """
         self.llm = llm
         self.backend = backend
+        # Store conversation histories for each file
+        # Each file maintains its own conversation history to ensure
+        # that feedback from previous iterations is preserved per file
+        self.conversation_histories: Dict[str, List[Dict[str, str]]] = {}
+
+        # Load opt_config.json for skip_files
+        opt_config_path = os.path.join(
+            os.path.dirname(__file__), "config_json", "opt_config.json"
+        )
+        if os.path.exists(opt_config_path):
+            with open(opt_config_path, "r") as f:
+                self.opt_config = json.load(f)
+        else:
+            self.opt_config = {"skip_files": {}}
 
     def _extract_code_blocks(self, response: str) -> List[str]:
         """
@@ -40,18 +54,86 @@ class KernelCodeGenerator:
         matches = re.findall(pattern, response, re.DOTALL)
         return [match.strip() for match in matches]
 
-    def call_llm(self, prompt: str) -> Tuple[str, Optional[Dict]]:
+    def call_llm(self, prompt: str, file_path: str) -> Tuple[str, Optional[Dict]]:
         """
-        Call the LLM API with the given prompt.
+        Call the LLM API with the given prompt, maintaining conversation history per file.
 
         Args:
             prompt: The prompt to send to the LLM
+            file_path: Path to the file being processed (used as key for conversation history)
 
         Returns:
             Tuple of (The LLM's response text, entire response dictionary)
         """
         system_prompt = f"You are an expert in high-performance computing, kernel optimization, and hardware acceleration for {self.backend.name}."
-        return self.llm.generate_completion(system_prompt, prompt)
+
+        # Get or create conversation history for this file
+        if file_path not in self.conversation_histories:
+            self.conversation_histories[file_path] = []
+            logging.debug(f"Created new conversation history for file: {file_path}")
+        else:
+            history_length = len(self.conversation_histories[file_path])
+            logging.debug(
+                f"Using existing conversation history for file: {file_path} ({history_length} messages)"
+            )
+
+        # Create a temporary LLM instance with the file-specific conversation history
+        temp_llm = LLM(
+            provider=self.llm.provider,
+            model=self.llm.model,
+            temperature=self.llm.temperature,
+            max_tokens=self.llm.max_tokens,
+        )
+        temp_llm.conversation_history = self.conversation_histories[file_path].copy()
+
+        try:
+            response, entire_response = temp_llm.generate_completion(
+                system_prompt, prompt
+            )
+            # Update the file-specific conversation history
+            self.conversation_histories[file_path] = (
+                temp_llm.conversation_history.copy()
+            )
+            return response, entire_response
+        finally:
+            # Clean up the temporary LLM instance
+            del temp_llm
+
+    def clear_conversation_history(self, file_path: str = None):
+        """
+        Clear conversation history for a specific file or all files.
+
+        Args:
+            file_path: Path to the file to clear history for. If None, clears all histories.
+        """
+        if file_path is None:
+            self.conversation_histories.clear()
+        else:
+            self.conversation_histories.pop(file_path, None)
+
+    def get_conversation_history(self, file_path: str) -> List[Dict[str, str]]:
+        """
+        Get the conversation history for a specific file.
+
+        Args:
+            file_path: Path to the file
+
+        Returns:
+            List of conversation messages for the file
+        """
+        return self.conversation_histories.get(file_path, []).copy()
+
+    def get_conversation_history_length(self, file_path: str) -> int:
+        """
+        Get the number of messages in the conversation history for a specific file.
+
+        Args:
+            file_path: Path to the file
+
+        Returns:
+            Number of messages in the conversation history
+        """
+        return len(self.conversation_histories.get(file_path, []))
 
     def generate_optimized_function(
         self,
@@ -95,8 +177,8 @@ class KernelCodeGenerator:
                 f"This is iteration {iteration}, but no previous results are given"
             )
 
-        # Call LLM
-        response, entire_response = self.call_llm(prompt)
+        # Call LLM with file-specific conversation history
+        response, entire_response = self.call_llm(prompt, file_path)
 
         # Extract code blocks and find the main optimized implementation
         code_blocks = self._extract_code_blocks(response)
@@ -157,6 +239,8 @@ class KernelCodeGenerator:
     ) -> str:
         """
         Generate feedback prompt based on previous iteration results.
+        Since conversation history is enabled, only include results/status,
+        not the previous implementation code.
 
         Args:
             previous_results: Results from previous iteration
@@ -169,51 +253,38 @@ class KernelCodeGenerator:
         """
         feedback_parts = []
 
-        # Add the previous iteration's optimized implementation
-        if "function_results" in previous_results:
-            function_results = previous_results["function_results"]
-            if function_name in function_results:
-                prev_function_result = function_results[function_name]
-                if prev_function_result.get("output_complete_code"):
-                    feedback_parts.append(
-                        "PREVIOUS ITERATION'S OPTIMIZED IMPLEMENTATION:"
-                    )
-                    feedback_parts.append(prev_function_result["output_complete_code"])
-
         # Add iteration context
-        feedback_parts.append("\n" + "=" * 50 + "\n")
         feedback_parts.append(
             f"FEEDBACK FROM PREVIOUS ITERATION (ITERATION {iteration - 1}):"
         )
+        feedback_parts.append("=" * 50)
 
         # Add compilation feedback
         if not previous_results.get("compilation_success", True):
-            feedback_parts.append("COMPILATION FAILED:")
-            feedback_parts.append(
-                previous_results.get("compile_error", "Unknown compilation error")
+            feedback_parts.append("❌ COMPILATION FAILED")
+            compile_error = previous_results.get(
+                "compile_error", "Unknown compilation error"
             )
-            feedback_parts.append(
-                "\nPlease fix the compilation errors in your optimized implementation."
-            )
+            if compile_error:
+                feedback_parts.append(f"Error: {compile_error}")
+            feedback_parts.append("Fix the compilation errors in your implementation.")
 
         # Add execution feedback
         elif not previous_results.get("execution_success", True):
-            feedback_parts.append("EXECUTION FAILED:")
-            feedback_parts.append(
-                previous_results.get("run_error", "Unknown execution error")
-            )
-            feedback_parts.append(
-                "\nPlease fix the runtime errors in your optimized implementation."
-            )
+            feedback_parts.append("❌ EXECUTION FAILED")
+            run_error = previous_results.get("run_error", "Unknown execution error")
+            if run_error:
+                feedback_parts.append(f"Error: {run_error}")
+            feedback_parts.append("Fix the runtime errors in your implementation.")
 
         # Add verification feedback
         elif not previous_results.get("verification_success", True):
-            feedback_parts.append("VERIFICATION FAILED:")
+            feedback_parts.append("❌ VERIFICATION FAILED")
             feedback_parts.append(
-                "The optimized implementation produced incorrect results."
+                "The optimized implementation produces incorrect results."
             )
             feedback_parts.append(
-                "\nPlease ensure functional equivalence in your optimized implementation."
+                "Fix the verification error by ensuring functional equivalence."
             )
 
         # If everything passed, provide performance feedback and improvement instructions
@@ -271,18 +342,13 @@ class KernelCodeGenerator:
             feedback_parts.append(
                 "Try to improve the performance further if possible, while maintaining correctness."
             )
-            feedback_parts.append("\n" + "=" * 50 + "\n")
-            feedback_parts.append(
-                "Based on the above feedback, provide an improved implementation while following the original task."
-            )
 
-            # Add the original prompt
-            feedback_parts.append("\nORIGINAL TASK:")
-            feedback_parts.append(
-                self.backend.create_prompt(complete_code, function_name)
-            )
+        feedback_parts.append("=" * 50)
+        feedback_parts.append(
+            "Based on the above feedback, provide an improved implementation."
+        )
 
-            return "\n".join(feedback_parts)
+        return "\n".join(feedback_parts)
 
     def save_results(self, results: Dict, output_dir: str):
         """
@@ -343,10 +409,13 @@ class KernelCodeGenerator:
         # Get all .cpp files in cpu_impl
         cpp_files = [f for f in os.listdir(cpu_impl_path) if f.endswith(".cpp")]
 
+        # Get skip list for this kernel/benchmark
+        skip_files = set(self.opt_config.get("skip_files", {}).get(benchmark_name, []))
+
         results_all_iter = {}  # [iteration_num] -> results
 
         logging.info(
-            f"Processing benchmark '{benchmark_name}' from file: {benchmark_path} using {self.backend.name} backend"
+            f"Processing benchmark '{benchmark_name}' from file: {cpu_impl_path} using {self.backend.name} backend"
         )
 
         previous_results = None
@@ -369,6 +438,11 @@ class KernelCodeGenerator:
             all_results = {}
             all_function_results = {}  # Store detailed results for each function
             for cpp_file in cpp_files:
+                if cpp_file in skip_files:
+                    # logging.info(
+                    #     f"Skipping file '{cpp_file}' for kernel '{benchmark_name}' as specified in opt_config.json."
+                    # )
+                    continue
                 function_name = os.path.splitext(cpp_file)[0]  # Remove .cpp extension
                 file_path = os.path.join(cpu_impl_path, cpp_file)
 
@@ -452,9 +526,6 @@ class KernelCodeGenerator:
                 )
                 with open(summary_file, "w") as f:
                     json.dump(summary_data, f, indent=2)
-
-                logging.info(f"Files saved in: {output_iter_dir}")
-                logging.info(f"Summary saved to: {summary_file}")
 
                 # Store current results for next iteration feedback and continue to next iteration
                 iteration_results = {
@@ -580,8 +651,14 @@ class KernelCodeGenerator:
             with open(summary_file, "w") as f:
                 json.dump(summary_data, f, indent=2)
 
-            logging.info(f"Files saved in: {output_iter_dir}")
-            logging.info(f"Summary saved to: {summary_file}")
+            # Show relative path starting from llm_output
+            relative_path = os.path.relpath(
+                output_iter_dir,
+                start=os.path.dirname(
+                    os.path.dirname(os.path.dirname(output_iter_dir))
+                ),
+            )
+            logging.info(f"Files saved in: {relative_path}")
 
             # Store results for this iteration
             iteration_results = {

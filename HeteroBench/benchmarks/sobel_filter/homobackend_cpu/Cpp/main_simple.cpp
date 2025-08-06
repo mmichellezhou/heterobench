@@ -266,7 +266,7 @@ int main(int argc, char **argv) {
   cout << "  gradient_magnitude: "
        << gradient_magnitude_time / gradient_magnitude_optimized_time << "x"
        << endl;
-  cout << "  Single iteration: " << original_total_time / optimized_total_time
+  cout << "  Total: " << original_total_time / optimized_total_time
        << "x" << endl;
   cout << "Whole time: " << whole_time << " seconds" << endl;
 

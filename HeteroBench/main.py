@@ -191,6 +191,7 @@ def find_best_iteration_and_create_summary(
 
     return summary
 
+
 def process_benchmarks(
     generator: KernelCodeGenerator,
     benchmark_names: List[str],
@@ -246,6 +247,7 @@ def process_benchmarks(
                 "benchmark_name": benchmark_name,
                 "backend_name": backend_name,
                 "best_iteration": None,
+                "kernel_generation_success": False,
                 "compilation_success": False,
                 "execution_success": False,
                 "verification_success": False,

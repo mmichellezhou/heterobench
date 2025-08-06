@@ -119,6 +119,7 @@ Do not include any other text other than the optimized function implementation a
             lines = complete_code[: function_start + len(match.group(0))].split("\n")
 
             # Look backwards to find the function signature start
+            function_start_line = -1  # Initialize with default value
             for i in range(len(lines) - 1, -1, -1):
                 if function_name in lines[i]:
                     # Found the line with function name, now find the return type
@@ -135,6 +136,14 @@ Do not include any other text other than the optimized function implementation a
                         j -= 1
                     if j >= 0:
                         function_start_line = j
+                        break
+
+            # Check if we found a valid function start line
+            if function_start_line == -1:
+                # Fallback: use the line where function name was found
+                for i in range(len(lines) - 1, -1, -1):
+                    if function_name in lines[i]:
+                        function_start_line = i
                         break
 
             # Extract from function start to end

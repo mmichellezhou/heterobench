@@ -1,16 +1,17 @@
 import os
 import logging
 from openai import OpenAI
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Optional, Tuple, List
 
 # Default configurations for different models
 DEFAULT_MODEL_CONFIGS = {
     "openai": {
-        "gpt-4o-mini": {"temperature": 0.0, "max_tokens": 8196},
-        "gpt-4o": {"temperature": 0.0, "max_tokens": 8196},
+        "gpt-4o-mini": {"temperature": 0.0, "max_tokens": 65536},
+        "gpt-4o": {"temperature": 0.0, "max_tokens": 65536},
     },
     "google": {
         "gemini-2.5-flash-preview-05-20": {"temperature": 0.0, "max_tokens": 65536},
+        "gemini-2.5-flash": {"temperature": 0.0, "max_tokens": 65536},
         "gemini-2.5-pro-preview-05-06": {"temperature": 0.0, "max_tokens": 65536},
     }
 }
@@ -32,6 +33,7 @@ class LLM:
         """
         self.provider = provider.lower()
         self.model = model
+        self.conversation_history: List[Dict[str, str]] = []
         
         # Get API key from parameter or environment
         if api_key is None:
@@ -85,10 +87,37 @@ class LLM:
         if model_config is None:
             # Use default config if model not found
             logging.warning(f"Warning: No default config found for {self.provider}/{self.model}, using defaults")
-            return {"temperature": 0.0, "max_tokens": 8196}
+            return {"temperature": 0.0, "max_tokens": 65536}
         
         return model_config
     
+    def add_system_message(self, system_message: str):
+        """
+        Add a system message to the conversation history.
+        """
+        self.conversation_history.append({
+            "role": "system",
+            "content": system_message
+        })
+    
+    def add_user_message(self, user_message: str):
+        """
+        Add a user message to the conversation history.
+        """
+        self.conversation_history.append({
+            "role": "user",
+            "content": user_message
+        })
+    
+    def add_assistant_message(self, assistant_message: str):
+        """
+        Add an assistant message to the conversation history.
+        """
+        self.conversation_history.append({
+            "role": "assistant",
+            "content": assistant_message
+        })
+
     def generate_completion(self, system_prompt: str, user_prompt: str, 
                           temperature: Optional[float] = None, max_tokens: Optional[int] = None) -> Tuple[str, Optional[Dict]]:
         """
@@ -107,13 +136,17 @@ class LLM:
         temp = temperature if temperature is not None else self.temperature
         max_tok = max_tokens if max_tokens is not None else self.max_tokens
         
+        # if there is no system prompt in the conversation history, add it
+        if len(self.conversation_history) == 0 or self.conversation_history[0]["role"] != "system":
+            self.add_system_message(system_prompt)
+        
+        # add user prompt to conversation history
+        self.add_user_message(user_prompt)
+
         try:
             response = self.client.chat.completions.create(
                 model=self.model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
+                messages=self.conversation_history,
                 temperature=temp,
                 max_tokens=max_tok
             )
@@ -147,8 +180,13 @@ class LLM:
                     }
                 }
             }
-            
-            return response.choices[0].message.content, response_dict
+
+            llm_response = response.choices[0].message.content
+            # add assistant message to conversation history
+            self.add_assistant_message(llm_response)
+
+            return llm_response, response_dict
+        
         except Exception as e:
             logging.error(f"Error calling {self.provider.upper()}: {e}")
             return "", None
