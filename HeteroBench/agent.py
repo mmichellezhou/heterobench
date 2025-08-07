@@ -140,8 +140,9 @@ class KernelCodeGenerator:
         file_path: str,
         function_name: str,
         benchmark_name: str,
+        output_dir: str = None,
         iteration: int = 0,
-        previous_results: Dict = None,
+        previous_results: Dict = None
     ) -> Dict:
         """
         Generate an optimized function implementation through the LLM pipeline.
@@ -169,9 +170,7 @@ class KernelCodeGenerator:
         if iteration == 0:
             prompt = self.backend.create_prompt(complete_code, function_name)
         elif previous_results:
-            prompt = self._generate_feedback(
-                previous_results, iteration, complete_code, function_name
-            )
+            prompt = self._generate_feedback(previous_results, iteration, function_name)
         else:
             raise ValueError(
                 f"This is iteration {iteration}, but no previous results are given"
@@ -185,10 +184,14 @@ class KernelCodeGenerator:
         llm_gen_code = None
         function_generation_success = False
 
-        if code_blocks:
+        # Handle None/empty response
+        if response and code_blocks:
             # Find the longest code block as the main implementation
             llm_gen_code = max(code_blocks, key=len)
-            function_generation_success = True
+            # Only set success to True if we have meaningful generated code
+            function_generation_success = (
+                llm_gen_code is not None and len(llm_gen_code.strip()) > 0
+            )
 
         # Create the optimized output code
         output_complete_code = None
@@ -205,15 +208,20 @@ class KernelCodeGenerator:
             cpu_impl_optimized_dir = cpu_impl_dir.replace(
                 "cpu_impl", "cpu_impl_optimized"
             )
-
-            # Create the optimized directory if it doesn't exist
             os.makedirs(cpu_impl_optimized_dir, exist_ok=True)
-
             output_code_path = os.path.join(
                 cpu_impl_optimized_dir, f"{function_name}_optimized.cpp"
             )
             with open(output_code_path, "w") as f:
                 f.write(output_complete_code)
+
+            # Also save to output_dir if provided (PolyBench style)
+            if output_dir is not None:
+                optimized_file = os.path.join(
+                    output_dir, f"{function_name}_optimized.cpp"
+                )
+                with open(optimized_file, "w") as f:
+                    f.write(output_complete_code)
 
         return {
             "file_path": file_path,
@@ -234,7 +242,6 @@ class KernelCodeGenerator:
         self,
         previous_results: Dict,
         iteration: int,
-        complete_code: str,
         function_name: str,
     ) -> str:
         """
@@ -260,25 +267,35 @@ class KernelCodeGenerator:
         feedback_parts.append("=" * 50)
 
         # Add compilation feedback
-        if not previous_results.get("compilation_success", True):
+        if not previous_results.get("compilation_success", False):
             feedback_parts.append("❌ COMPILATION FAILED")
-            compile_error = previous_results.get(
-                "compile_error", "Unknown compilation error"
-            )
-            if compile_error:
-                feedback_parts.append(f"Error: {compile_error}")
-            feedback_parts.append("Fix the compilation errors in your implementation.")
+            if (
+                "compile_and_run" in previous_results
+                and previous_results["compile_and_run"]
+            ):
+                compile_error = previous_results["compile_and_run"].get(
+                    "compile_error", ""
+                )
+                if compile_error:
+                    feedback_parts.append("Compilation Error Details:")
+                    feedback_parts.append(f"```\n{compile_error}\n```")
+            feedback_parts.append("Fix the compilation error in your implementation.")
 
         # Add execution feedback
-        elif not previous_results.get("execution_success", True):
+        elif not previous_results.get("execution_success", False):
             feedback_parts.append("❌ EXECUTION FAILED")
-            run_error = previous_results.get("run_error", "Unknown execution error")
-            if run_error:
-                feedback_parts.append(f"Error: {run_error}")
-            feedback_parts.append("Fix the runtime errors in your implementation.")
+            if (
+                "compile_and_run" in previous_results
+                and previous_results["compile_and_run"]
+            ):
+                run_error = previous_results["compile_and_run"].get("run_error", "")
+                if run_error:
+                    feedback_parts.append("Runtime Error Details:")
+                    feedback_parts.append(f"```\n{run_error}\n```")
+            feedback_parts.append("Fix the runtime error in your implementation.")
 
         # Add verification feedback
-        elif not previous_results.get("verification_success", True):
+        elif not previous_results.get("verification_success", False):
             feedback_parts.append("❌ VERIFICATION FAILED")
             feedback_parts.append(
                 "The optimized implementation produces incorrect results."
@@ -368,15 +385,7 @@ class KernelCodeGenerator:
             output_dir, f"{results['function_name']}_response.txt"
         )
         with open(response_file, "w") as f:
-            f.write(results["response"])
-
-        # Save the optimized code if generated
-        if results.get("output_complete_code"):
-            optimized_file = os.path.join(
-                output_dir, f"{results['function_name']}_optimized.cpp"
-            )
-            with open(optimized_file, "w") as f:
-                f.write(results["output_complete_code"])
+            f.write(results["response"] if results["response"] is not None else "")
 
     def process_benchmark(
         self,
@@ -455,6 +464,7 @@ class KernelCodeGenerator:
                     file_path,
                     function_name,
                     benchmark_name,
+                    output_iter_dir,
                     iteration,
                     previous_results,
                 )
@@ -469,7 +479,19 @@ class KernelCodeGenerator:
                     ],
                 }
 
-                all_results[function_name] = function_summary
+                # Handle kernel generation failure for individual function
+                if not results.get("function_generation_success", False):
+                    results.update(
+                        {
+                            "compilation_success": False,
+                            "execution_success": False,
+                            "verification_success": False,
+                        }
+                    )
+                    all_functions_successful = False
+
+                all_results[function_name] = results
+                all_function_results[function_name] = function_summary
 
                 # Store detailed results for summary file
                 all_function_results[function_name] = {
@@ -483,49 +505,22 @@ class KernelCodeGenerator:
                             else 0
                         ),
                         "prompt_length": len(results.get("prompt", "")),
-                        "llm_response_length": len(results.get("response", "")),
+                        "llm_response_length": (
+                            len(results.get("response", ""))
+                            if results.get("response")
+                            else 0
+                        ),
                     }
                 }
 
                 # Store full function results for feedback
                 all_results[function_name] = results
 
-                # Track if all functions were successful
-                if not results["function_generation_success"]:
-                    all_functions_successful = False
-
-            # Check if kernel generation was successful
+            # Check overall kernel generation success
             if not all_functions_successful:
                 logging.warning(
                     "✗ Kernel generation failed. Skipping compilation and execution."
                 )
-
-                # Create summary file for failed kernel generation
-                summary_data = {
-                    "kernel": benchmark_name,
-                    "backend": self.backend.name,
-                    "input_code_path": cpu_impl_path,
-                    "output_code_path": output_iter_dir,
-                    "status": {
-                        "kernel_generation_success": False,
-                        "compilation_success": False,
-                        "execution_success": False,
-                        "verification_success": False,
-                    },
-                    "performance_analysis": {
-                        "original_time_seconds": None,
-                        "optimized_time_seconds": None,
-                        "speedup": None,
-                    },
-                    "files": all_function_results,
-                }
-
-                # Save the summary file
-                summary_file = os.path.join(
-                    output_iter_dir, f"{benchmark_name}_summary.json"
-                )
-                with open(summary_file, "w") as f:
-                    json.dump(summary_data, f, indent=2)
 
                 # Store current results for next iteration feedback and continue to next iteration
                 iteration_results = {
@@ -535,7 +530,7 @@ class KernelCodeGenerator:
                     "execution_success": False,
                     "verification_success": False,
                     "performance_analysis": {},
-                    "compile_results": None,
+                    "compile_and_run": None,
                     "function_results": all_results,
                 }
                 results_all_iter[iteration] = iteration_results
@@ -546,6 +541,9 @@ class KernelCodeGenerator:
 
             # Compile and run if all functions were generated successfully
             performance_analysis = {}
+            compilation_success = False
+            execution_success = False
+            verification_success = False
 
             # Use backend to compile and run
             compile_results = self.backend.compile_and_run(
@@ -618,10 +616,11 @@ class KernelCodeGenerator:
                         )
                 else:
                     logging.error(f"✗ Execution failed:")
-                    logging.error(compile_results.get("run_error", "Unknown error"))
+                    logging.error(compile_results["run_error"])
             else:
                 logging.error(f"✗ Compilation failed:")
-                logging.error(compile_results.get("compile_error", "Unknown error"))
+                logging.error(compile_results["compile_error"])
+
             # Create summary file for this iteration
             summary_data = {
                 "kernel": benchmark_name,
@@ -660,6 +659,30 @@ class KernelCodeGenerator:
             )
             logging.info(f"Files saved in: {relative_path}")
 
+            # Write compile_output.txt and execution_output.txt
+            compile_output_file = os.path.join(
+                output_iter_dir, f"{benchmark_name}_compile_output.txt"
+            )
+            with open(compile_output_file, "w") as f:
+                f.write("COMPILATION COMMAND:\n")
+                f.write(compile_results.get("compile_cmd", "") + "\n")
+                f.write("\nSTDOUT:\n")
+                f.write(compile_results.get("compile_output", ""))
+                f.write("\nSTDERR:\n")
+                f.write(compile_results.get("compile_error", ""))
+
+            if compile_results.get("compilation_successful"):
+                execution_output_file = os.path.join(
+                    output_iter_dir, f"{benchmark_name}_execution_output.txt"
+                )
+                with open(execution_output_file, "w") as f:
+                    f.write("EXECUTION COMMAND:\n")
+                    f.write(compile_results.get("executable", "") + "\n")
+                    f.write("\nSTDOUT:\n")
+                    f.write(compile_results.get("run_output", ""))
+                    f.write("\nSTDERR:\n")
+                    f.write(compile_results.get("run_error", ""))
+
             # Store results for this iteration
             iteration_results = {
                 "iteration": iteration,
@@ -668,11 +691,9 @@ class KernelCodeGenerator:
                 "execution_success": execution_success,
                 "verification_success": verification_success,
                 "performance_analysis": performance_analysis,
-                "compile_results": (
-                    compile_results if all_functions_successful else None
-                ),
+                "compile_and_run": compile_results,
                 "function_results": all_results,
-                "individual_function_results": all_function_results,  # Store detailed function results
+                "individual_function_results": all_function_results,
             }
 
             # Store current results for next iteration feedback

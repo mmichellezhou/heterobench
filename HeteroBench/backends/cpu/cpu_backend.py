@@ -39,7 +39,7 @@ class CPUBackend(Backend):
         if not function_code:
             raise ValueError(f"Could not find function '{function_name}' in code")
 
-        return f"""You are an expert in high-performance computing and kernel engineering on the CPU. You are familiar with different optimization techniques including memory access optimization, tiling, unrolling, loop transformations, and SIMD instructions. Focus on single-threaded performance improvement. Don't use multi-threading nor vectorization.
+        return f"""You are an expert in high-performance computing and kernel engineering on the CPU. You are familiar with different optimization techniques including vectorization,memory access optimization, tiling, unrolling, loop transformations, and SIMD instructions. Focus on single-threaded performance improvement. Don't use multi-threading.
 
 Given the following code:
 ```cpp
@@ -51,7 +51,7 @@ with the following function to optimize:
 {function_code}
 ```
 
-Task: Analyze this kernel and generate an optimized kernel implementation to get better performance while maintaining functional equivalence. Consider applying optimizations directly to the kernel, such as memory access optimization, tiling, unrolling, etc. You should only use single thread for the optimized kernel implementation.
+Task: Analyze this kernel and generate an optimized kernel implementation to get better performance while maintaining functional equivalence. Consider applying optimizations directly to the kernel, such as vectorization, memory access optimization, tiling, unrolling, etc. You should only use single thread for the optimized kernel implementation.
 
 Machine we are using: 
 - Intel(R) Xeon(R) Gold 6248R CPU @ 3.00GHz
@@ -192,12 +192,14 @@ Do not include any other text other than the optimized function implementation a
     def compile_and_run(
         self, benchmark_name: str, benchmark_path: str, output_dir: str
     ) -> Dict:
-        """Compile and run HeteroBench benchmark using make run_simple."""
+        """Compile and run HeteroBench benchmark using separate compilation and execution steps."""
         cpp_path = os.path.join(benchmark_path, "homobackend_cpu", "Cpp")
+        executable_path = os.path.join(cpp_path, f"{benchmark_name}_sw_simple")
 
         compile_results = {
             "benchmark_name": benchmark_name,
             "cpp_path": cpp_path,
+            "executable": executable_path,
             "compilation_successful": False,
             "execution_successful": False,
             "compile_output": "",
@@ -234,29 +236,41 @@ Do not include any other text other than the optimized function implementation a
                     )
                     return compile_results
 
-            # Build and run the benchmark
-            build_result = subprocess.run(
-                ["make", "run_simple"],
+            # Step 1: Compile the benchmark
+            compile_cmd = ["make", f"{benchmark_name}_sw_simple"]
+            compile_process = subprocess.run(
+                compile_cmd,
                 capture_output=True,
                 text=True,
-                timeout=300,
+                timeout=60,
                 env=env,
             )
 
-            with open(
-                os.path.join(output_dir, f"{benchmark_name}_build_output.txt"), "w"
-            ) as f:
-                f.write("BUILD COMMAND: make run_simple\n")
-                f.write("STDOUT:\n")
-                f.write(build_result.stdout)
-                f.write("\nSTDERR:\n")
-                f.write(build_result.stderr)
+            compile_results["compile_cmd"] = " ".join(compile_cmd)
+            compile_results["compile_output"] = compile_process.stdout
+            compile_results["compile_error"] = compile_process.stderr
+            compile_results["compilation_successful"] = compile_process.returncode == 0
 
-            compile_results["compile_cmd"] = "make run_simple"
-            compile_results["run_output"] = build_result.stdout
-            compile_results["run_error"] = build_result.stderr
-            compile_results["compilation_successful"] = build_result.returncode == 0
-            compile_results["execution_successful"] = build_result.returncode == 0
+            # Step 2: Run the executable if compilation succeeded
+            if compile_results["compilation_successful"]:
+                # Get input/output paths from the benchmark
+                input_path = os.path.join(benchmark_path, "input")
+                output_path = os.path.join(benchmark_path, "output")
+
+                # Use local path to executable since we are already in cpp_path
+                local_executable = f"./{benchmark_name}_sw_simple"
+                run_cmd = [local_executable, input_path, output_path]
+                run_process = subprocess.run(
+                    run_cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=300,
+                    env=env,
+                )
+
+                compile_results["run_output"] = run_process.stdout
+                compile_results["run_error"] = run_process.stderr
+                compile_results["execution_successful"] = run_process.returncode == 0
 
         except subprocess.TimeoutExpired:
             compile_results["compile_error"] = "Compilation or execution timeout"
