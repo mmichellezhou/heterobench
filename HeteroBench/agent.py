@@ -142,7 +142,7 @@ class KernelCodeGenerator:
         benchmark_name: str,
         output_dir: str = None,
         iteration: int = 0,
-        previous_results: Dict = None
+        previous_results: Dict = None,
     ) -> Dict:
         """
         Generate an optimized function implementation through the LLM pipeline.
@@ -268,7 +268,8 @@ class KernelCodeGenerator:
 
         # Add compilation feedback
         if not previous_results.get("compilation_success", False):
-            feedback_parts.append("❌ COMPILATION FAILED")
+            # Simple logic: check if function_optimized.cpp is mentioned in the error message
+            compile_error = ""
             if (
                 "compile_and_run" in previous_results
                 and previous_results["compile_and_run"]
@@ -276,10 +277,19 @@ class KernelCodeGenerator:
                 compile_error = previous_results["compile_and_run"].get(
                     "compile_error", ""
                 )
+            optimized_cpp = f"{function_name}_optimized.cpp"
+            if optimized_cpp in compile_error:
+                feedback_parts.append("❌ COMPILATION FAILED")
                 if compile_error:
                     feedback_parts.append("Compilation Error Details:")
                     feedback_parts.append(f"```\n{compile_error}\n```")
-            feedback_parts.append("Fix the compilation error in your implementation.")
+                feedback_parts.append(
+                    f"Fix the compilation error in your implementation of {optimized_cpp}."
+                )
+            else:
+                feedback_parts.append(
+                    "Try to improve the performance further if possible, while maintaining correctness."
+                )
 
         # Add execution feedback
         elif not previous_results.get("execution_success", False):

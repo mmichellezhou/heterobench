@@ -45,35 +45,22 @@ Makefile
 *.jpg
 
 # Executable files
-cedt_sw
-optical_flow_sw
-digit_recog_sw
-sobel_filter_sw
-rendering_sw
-krnl_3mm_sw
-krnl_adi_sw
-mlp_sw
-cnn_sw
-parallelize_particle_sw
-spam_filter_sw
-test
-gpu_test_sw
+3mm_sw
+adi_sw
 ced_sw
-cedt
-opf_sw
-dgr_sw
-sbf_sw
-krnl_3mm_sw
-krnl_adi_sw
-mlp_sw
 cnn_sw
-ppc_sw
-spf_sw
+dgr_sw
+gpu_test_sw
+mlp_sw
 oha_sw
+opf_sw
+ppc_sw
+sbf_sw
+spf_sw
 
 # Executable optimized files
-krnl_3mm_sw_simple
-krnl_adi_sw_simple
+3mm_sw_simple
+adi_sw_simple
 ced_sw_simple
 cnn_sw_simple
 dgr_sw_simple
@@ -102,3 +89,6 @@ spf_sw_simple
 
 # PolyBench files (reference implementation - should not be tracked)
 /polybench/
+
+old_agent.py
+old_main.py

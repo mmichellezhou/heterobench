@@ -27,6 +27,43 @@ class CPUBackend(Backend):
             "spf": "benchmarks/spam_filter",
         }
 
+        # Execution command mapping for each benchmark
+        # Format: {benchmark_name: (executable_args, description)}
+        self.execution_commands = {
+            "3mm": ([], "No arguments needed"),
+            "adi": ([], "No arguments needed"),
+            "ced": (
+                [
+                    "input/1439x1919_stanford.jpg",
+                    "output/1439x1919_stanford.jpg",
+                    "30",
+                    "90",
+                ],
+                "Image processing with thresholds from Makefile",
+            ),
+            "cnn": (["input", "output"], "CNN with input/output paths for .bin files"),
+            "dgr": ([], "No arguments needed"),
+            "mlp": (["input", "output"], "MLP with input/output paths"),
+            "oha": (["input", "output"], "One head attention with input/output paths"),
+            "opf": (
+                [
+                    "-p",
+                    "../../datasets/larger",
+                    "-o",
+                    "../../datasets/output/acc_output.flo",
+                    "-O",
+                    "../../datasets/output/acc_output_optimized.flo",
+                ],
+                "Optical flow with data path and output files",
+            ),
+            "ppc": ([], "No arguments needed"),
+            "sbf": (
+                ["input/1439x1919_stanford.jpg", "output/1439x1919_stanford.jpg"],
+                "Image processing with input/output images",
+            ),
+            "spf": (["-p", "../../data"], "Spam filter with data path"),
+        }
+
     def get_available_kernels(self) -> Dict[str, str]:
         """Get available HeteroBench benchmarks."""
         return self.heterobench_benchmarks.copy()
@@ -39,7 +76,7 @@ class CPUBackend(Backend):
         if not function_code:
             raise ValueError(f"Could not find function '{function_name}' in code")
 
-        return f"""You are an expert in high-performance computing and kernel engineering on the CPU. You are familiar with different optimization techniques including vectorization,memory access optimization, tiling, unrolling, loop transformations, and SIMD instructions. Focus on single-threaded performance improvement. Don't use multi-threading.
+        return f"""You are an expert in high-performance computing and kernel engineering on the CPU. You are familiar with different optimization techniques including memory access optimization, tiling, unrolling, and loop transformations. Focus on single-threaded performance improvement. Don't use multi-threading.
 
 Given the following code:
 ```cpp
@@ -51,7 +88,7 @@ with the following function to optimize:
 {function_code}
 ```
 
-Task: Analyze this kernel and generate an optimized kernel implementation to get better performance while maintaining functional equivalence. Consider applying optimizations directly to the kernel, such as vectorization, memory access optimization, tiling, unrolling, etc. You should only use single thread for the optimized kernel implementation.
+Task: Analyze this kernel and generate an optimized kernel implementation to get better performance while maintaining functional equivalence. Consider applying optimizations directly to the kernel, such as memory access optimization, tiling, unrolling, etc. You should only use single thread for the optimized kernel implementation.
 
 Machine we are using: 
 - Intel(R) Xeon(R) Gold 6248R CPU @ 3.00GHz
@@ -253,13 +290,37 @@ Do not include any other text other than the optimized function implementation a
 
             # Step 2: Run the executable if compilation succeeded
             if compile_results["compilation_successful"]:
-                # Get input/output paths from the benchmark
-                input_path = os.path.join(benchmark_path, "input")
-                output_path = os.path.join(benchmark_path, "output")
+                # Get execution command arguments for this benchmark
+                if benchmark_name in self.execution_commands:
+                    executable_args, description = self.execution_commands[
+                        benchmark_name
+                    ]
+                    # Replace placeholder paths with actual benchmark paths
+                    args = []
+                    for arg in executable_args:
+                        if arg == "input":
+                            args.append("../../input")
+                        elif arg == "output":
+                            args.append("../../output")
+                        elif arg.startswith("input/"):
+                            # Handle specific input files like "input/input.png"
+                            args.append("../../" + arg)
+                        elif arg.startswith("output/"):
+                            # Handle specific output files like "output/output.png"
+                            args.append("../../" + arg)
+                        else:
+                            # Keep other arguments as-is (like threshold values)
+                            args.append(arg)
+                else:
+                    # Fallback to default behavior
+                    args = [
+                        os.path.join(benchmark_path, "input"),
+                        os.path.join(benchmark_path, "output"),
+                    ]
 
                 # Use local path to executable since we are already in cpp_path
                 local_executable = f"./{benchmark_name}_sw_simple"
-                run_cmd = [local_executable, input_path, output_path]
+                run_cmd = [local_executable] + args
                 run_process = subprocess.run(
                     run_cmd,
                     capture_output=True,
